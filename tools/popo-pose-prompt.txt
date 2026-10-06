@@ -1,0 +1,16 @@
+Generated with the built-in image_gen tool using the user's standalone Popo image as the character reference.
+Saved source: asset/popo-mishap-poses.png
+Runtime atlas: assets/sprites/popo-mishap-poses.webp
+
+Use case: stylized-concept.
+Asset type: one production game character animation sprite atlas, transparent PNG.
+Reference: of the three provided images, use ONLY the user's standalone cream-white bear walking on all fours (no scene) as the character identity reference. The two game screenshots are context only; do NOT extract or copy their seated bear or boat.
+Generate a clean six-pose sprite atlas of this exact Popo character, arranged in three columns and two rows on a genuinely transparent background. Each pose is one COMPLETE separate bear, with ample clear padding and no overlap. Constant camera angle: three-quarter profile facing RIGHT, eye-level, same camera distance and identical head size/fur/body proportions in all six cells. Preserve reference's cream-white fluffy fur, swept-up hair tuft, blue eyes, dark nose, smiling round muzzle, small rounded ears, chunky paws and black paw pads, warm polished 3D children's game lighting.
+POSES, row-major:
+1 top left: seated, both back feet forward, both front paws held forward together around an imaginary fishing rod, calm happy smile; NO rod drawn.
+2 top middle: same seated pose with slight lean forward, wide blue eyes and tiny surprised O mouth, paws braced around imaginary rod; no prop.
+3 top right: playful airborne slip, compact full body, both front paws extended forward, legs tucked, surprised but safe/funny, no distress.
+4 bottom left: upright bobbing/treading pose for resurfacing, cheerful relieved face looking right, front paws near chest; render the FULL body and feet without any water, water masking is done by the game.
+5 bottom middle: climbing/reaching with front paws extended to the LEFT toward an imaginary raft edge, head glances left, body still camera's same three-quarter side view, rear paws tucked under. ALL anatomy visible, no actual raft.
+6 bottom right: seated as pose 1, small embarrassed warm smile, slightly lifted eyebrows, front paws together ready to grip rod, eyes open.
+All six bears must remain same character and same physical scale, NO independent pose zoom, NO clipped hands/feet/hair. Consistent 2 front limbs + 2 hind limbs, no extra limbs. Atlas only: no boat, raft, bucket, rod, fishing line, hook, water, splash, ripples, shadow floor, rectangles, checkerboard, scenery, text, labels, frames, clothing or accessories. Do not copy edge noise or colored halo artifacts from the reference; clean antialiased transparent edges. Large high-quality landscape canvas, evenly spaced 3x2 cells.
