@@ -122,7 +122,7 @@ async function correctCatch(game, fish) {
 }
 
 // Durations use game time, so pause freezes the whole mishap, including its effects.
-const WRONG = { acknowledge: 160, tug: 220, yank: 170, slack: 210, brace: 320, doubleTake: 140, hang: 100, fall: 380,
+const WRONG = { acknowledge: 160, tug: 220, yank: 230, slack: 240, brace: 320, doubleTake: 140, hang: 100, fall: 380,
   dipIn: 160, dip: 300, emerge: 340, blink: 100, reach: 240, climb: 420, seat: 260, wet: 300, grip: 260, smile: 160 };
 
 async function wrongCatch(game, fish) {
@@ -174,31 +174,36 @@ async function wrongCatch(game, fish) {
       m.rodBend = 0.035 * k;
       popo.line.tension = 1.4;
     });
-    // tug-of-war: three yanks, each harder; the fish darts off and Popo jolts after it
+    // tug-of-war: three pulls, each harder. The fish dives away and Popo leans after it;
+    // between pulls the line slackens and both ease back, ending on the values the next
+    // beat starts from so nothing snaps.
     for (let i = 1; i <= 3; i += 1) {
       const strength = i / 3;
-      const dart = pull + 26 * i;
-      const jolt = 9 + 14 * i;
+      const last = i === 3;
+      const dartX = home.x + pull + 22 * i;
+      const backX = last ? home.x + pull : home.x + pull + 10 * i;
+      const slide = 9 + 5 * i;
       sound('tug');
       fish.wiggle();
       await clock.tween(WRONG.yank, token, (t) => {
-        const k = ease.out(t);
-        fish.x = home.x + pull + (dart - pull) * k;
-        fish.y = home.y + Math.sin(k * Math.PI) * 10 * (i % 2 ? 1 : -1);
-        m.x = 9 + (jolt - 9) * k;
-        m.y = -6 * Math.sin(k * Math.PI) * strength;
-        m.angle = (0.045 + 0.07 * strength * k) * rotation;
-        m.rodBend = 0.035 + 0.05 * strength * k;
-        m.raftAngle = (reduced ? 0 : 0.012 * strength * k);
-        popo.line.tension = 1.6 + strength;
+        const k = ease.inOut(t);
+        fish.x = home.x + pull + (dartX - home.x - pull) * k;
+        fish.y = home.y + 6 * strength * Math.sin(k * Math.PI / 2);
+        m.x = 9 + (slide - 9) * k;
+        m.y = -4 * strength * Math.sin(k * Math.PI);
+        m.angle = (0.045 + 0.065 * strength * k) * rotation;
+        m.rodBend = 0.035 + 0.045 * strength * k;
+        m.raftAngle = reduced ? 0 : 0.01 * strength * k;
+        popo.line.tension = 1.5 + strength;
       });
       await clock.tween(WRONG.slack, token, (t) => {
         const k = ease.inOut(t);
-        fish.x = dart + (home.x + pull - dart) * k * 0.6;
-        fish.y = home.y;
-        m.x = jolt + (9 + 4 * i - jolt) * k;
-        m.angle = (0.045 + 0.07 * strength * (1 - k * 0.5)) * rotation;
-        m.raftAngle *= 1 - 0.5 * k;
+        const relax = last ? 1 : 0.5;
+        fish.x = dartX + (backX - dartX) * k;
+        fish.y = home.y + 6 * strength * (1 - k);
+        m.x = slide + (9 - slide) * k * relax;
+        m.angle = (0.045 + 0.065 * strength * (1 - k * relax)) * rotation;
+        m.raftAngle *= 1 - 0.6 * k;
         popo.line.tension = 1.2;
       });
     }
