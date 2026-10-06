@@ -5,13 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#0b4fb8">
   <title>Popo's Shape Fishing</title>
-  <link rel="preload" as="image" href="assets/backgrounds/location-1.webp">
   <link rel="stylesheet" href="src/styles.css">
 </head>
 <body>
   <div id="app" class="app">
     <div id="stage" class="stage">
-      <canvas id="world" class="world" aria-hidden="true"></canvas>
+      <div id="scene" class="scene" aria-hidden="true">
+        <canvas id="water" class="layer"></canvas>
+        <canvas id="world" class="layer"></canvas>
+      </div>
 
       <div id="hits" class="hits"></div>
       <div id="hand" class="hand" hidden aria-hidden="true">
@@ -49,14 +51,14 @@
 
       <section id="overlay-reward" class="overlay reward" hidden aria-labelledby="reward-name">
         <div class="reward-card">
+          <div class="prize-burst" aria-hidden="true"></div>
           <button id="reward-fish" class="hero-fish" type="button" aria-label="Caught fish">
-            <span class="hero-ring"></span>
+            <span class="hero-glow"></span>
             <span id="reward-fish-img" class="fish-img"></span>
             <span class="sparkles" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
           </button>
           <h2 id="reward-name" class="reward-name"></h2>
           <p id="reward-fact" class="reward-fact"></p>
-          <button id="btn-continue" class="btn primary" type="button">Keep Exploring</button>
         </div>
       </section>
 
@@ -89,12 +91,14 @@
     <div id="rotate-hint" class="rotate-hint" hidden>Rotate your device for the best experience</div>
   </div>
   <script src="src/sprite-data.js" defer></script>
+  <script src="src/background-data.js" defer></script>
   <script src="src/levels.js" defer></script>
   <script src="src/state.js" defer></script>
   <script src="src/clock.js" defer></script>
   <script src="src/assets.js" defer></script>
   <script src="src/stage.js" defer></script>
   <script src="src/effects.js" defer></script>
+  <script src="src/water.js" defer></script>
   <script src="src/popo.js" defer></script>
   <script src="src/fish.js" defer></script>
   <script src="src/audio.js" defer></script>

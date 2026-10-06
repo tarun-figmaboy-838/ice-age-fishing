@@ -25,6 +25,9 @@ class Fish {
     this.driftPhase = Math.random() * TAU;
     this.driftAmp = 8 + Math.random() * 8;
     this.driftFreq = 0.25 + Math.random() * 0.2;
+    // Start on the drift curve so the first frame never jumps vertically.
+    this.baseY = y - Math.sin(this.driftPhase) * this.driftAmp;
+    this.targetY = this.baseY;
     this.bobPhase = Math.random() * TAU;
     this.frozen = false;
     this.wiggleT = -1;
@@ -86,7 +89,8 @@ class Fish {
     // turning: slow to a stop, flip, speed back up (no mid-flip squash of the body)
     if (this.turn) {
       this.turn.t += dt;
-      const k = Math.min(1, this.turn.t / 0.35);
+      const progress = Math.min(1, this.turn.t / 0.35);
+      const k = progress * progress * (3 - 2 * progress);
       if (this.turn.stage === 'slow') {
         this.speed = this.cruise * (1 - k);
         if (k >= 1) {
@@ -105,6 +109,13 @@ class Fish {
       }
     }
 
+    const stoppingDistance = this.speed * 0.35 * 0.5 + 3;
+    const edgeDistance = this.dir > 0 ? area.right - this.w / 2 - 10 - this.x : this.x - area.left - this.w / 2 - 10;
+    if (!this.turn && edgeDistance < stoppingDistance) this.startTurn();
+    if (!this.turn) {
+      const cruise = this.cruise * (1 + Math.sin(this.bobPhase * 0.37) * 0.06);
+      this.speed += (cruise - this.speed) * Math.min(1, dt * 1.4);
+    }
     this.x += this.dir * this.speed * dt;
     const half = this.w / 2 + 10;
     if (this.x < area.left + half) {
@@ -150,14 +161,12 @@ class Fish {
     if (this.gone) return;
     const bob = this.frozen && this.subtleWiggle ? 0 : Math.sin(this.bobPhase) * 2;
     let rot = 0;
-    let pulse = 1;
     if (this.wiggleT >= 0) {
       const t = this.wiggleT;
       if (this.subtleWiggle) {
         rot = Math.sin(t / 0.16 * Math.PI * 2) * 0.045 * (1 - t / 0.16);
       } else {
         rot = Math.sin(t * 38) * 0.14 * Math.max(0, 1 - t / 0.45);
-        pulse = 1 + Math.sin(Math.min(1, t / 0.2) * Math.PI) * 0.06;
       }
     }
     ctx.save();
@@ -175,7 +184,7 @@ class Fish {
       ctx.fill();
     }
     ctx.rotate(rot + this.pitch * this.dir);
-    ctx.scale(this.dir * pulse * this.scale, pulse * this.scale);
+    ctx.scale(this.dir * this.scale, this.scale);
     const [x0, y0, x1, y1] = this.box;
     ctx.drawImage(assets.fish.img, x0, y0, x1 - x0, y1 - y0, -this.w / 2, -this.h / 2, this.w, this.h);
     ctx.restore();

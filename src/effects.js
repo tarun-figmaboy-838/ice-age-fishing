@@ -8,18 +8,39 @@ function rand(a, b) {
   return a + Math.random() * (b - a);
 }
 
-// Ambient underwater motion and the small effect pools. Everything is pre-allocated and
-// reused. The painted background layers carry the scene (see game.js); this only adds
-// small bubbles, drifting specks and a soft light wash with no drawn shapes.
+// Bounds measured on the existing paintings, expressed in logical scene coordinates.
+// Roots sit behind rocks. Only upper vegetation and the adjacent water are refracted.
+const PLANTS = [
+  [[5,145,680,845], [205,292,735,815], [1360,1518,704,854], [1550,1658,760,859]],
+  [[5,140,677,842], [223,292,735,812], [1205,1290,747,827], [1390,1530,701,863], [1580,1658,788,869]],
+  [[5,138,677,842], [190,263,737,810], [1400,1534,699,864], [1562,1644,739,822]],
+  [[99,177,744,817], [1380,1470,750,850], [1520,1670,606,864]],
+].map((group, location) => group.map(([left,right,top,root], i) => ({
+  left, right, top, root, phase: 1.17 + i * 2.39 + location * 0.71,
+  speed: 0.48 + i * 0.073, amp: root - top > 120 ? 3.4 : 1.5,
+})));
+
+// The painted scenery carries the scene. Small fixed pools, low-contrast light and
+// registered plant deformation add life behind the learning fish. All motion uses game time.
 class Effects {
   constructor() {
     this.waterline = 390;
     this.reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.t = 0;
-    this.bubbles = Array.from({ length: 14 }, () => this.newBubble(true));
-    this.snow = Array.from({ length: 28 }, () => ({
-      x: rand(0, STAGE_W), y: rand(this.waterline + 40, SEABED_Y), r: rand(0.7, 1.6), vx: rand(-5, 5), vy: rand(2, 6), phase: rand(0, TAU), a: rand(0.12, 0.26),
+    this.sources = [{ x: 85, y: 835 }, { x: 252, y: 808 }, { x: 1460, y: 850 }];
+    this.bubbles = Array.from({ length: 12 }, () => {
+      const b = {}; this.resetBubble(b); return b;
+    });
+    this.motes = Array.from({ length: 18 }, () => ({
+      x: rand(0, STAGE_W), y: rand(this.waterline + 40, SEABED_Y),
+      r: rand(0.5, 1.3), vx: rand(-1.8, 1.8), vy: rand(0.4, 1.7),
+      depth: rand(0.15, 0.8), phase: rand(0, TAU), a: rand(0.035, 0.1),
     }));
+    this.lights = Array.from({ length: 3 }, (_, i) => ({
+      x: STAGE_W * (0.16 + i * 0.34), phase: rand(0, TAU), speed: rand(0.06, 0.11),
+    }));
+    this.reactions = Array.from({ length: 3 }, () => ({ life: 0 }));
+    this.sourceIn = rand(2, 5);
     this.ripples = Array.from({ length: 6 }, () => ({ life: 0 }));
     this.drops = Array.from({ length: 28 }, () => ({ life: 0 }));
     this.sparkles = Array.from({ length: 14 }, () => ({ life: 0 }));
@@ -29,23 +50,59 @@ class Effects {
     this.waterline = y;
   }
 
-  newBubble(anywhere) {
-    const r = rand(1.6, 5.5);
-    return {
-      x: rand(60, STAGE_W - 40),
-      y: anywhere ? rand(this.waterline + 60, SEABED_Y + 20) : SEABED_Y + rand(0, 30),
-      r,
-      speed: 12 + r * 4,
-      wobble: rand(0, TAU),
-      wobbleAmp: rand(4, 10),
-    };
+  setLocation(index) {
+    this.sources = this.plantsFor(index).map(p => ({ x: (p.left + p.right) / 2, y: p.root - 5 }));
   }
 
-  // A bubble released at a point, e.g. from a fish's mouth. Reuses the bubble nearest the surface.
+  plantsFor(index) { return PLANTS[index] || PLANTS[0]; }
+
+  plantDisplacement(x, y, plants) {
+    if (this.reduced) return 0;
+    let bend = 0;
+    for (const p of plants) {
+      if (x <= p.left || x >= p.right || y <= p.top || y >= p.root) continue;
+      const height = p.root - p.top;
+      const rootWeight = (p.root - y) / height;
+      const topFade = Math.min(1, (y - p.top) / 18);
+      const across = Math.sin((x - p.left) / (p.right - p.left) * Math.PI);
+      const rhythm = Math.sin(this.t * p.speed + p.phase) + 0.32 * Math.sin(this.t * p.speed * 0.61 + p.phase * 2);
+      bend += rhythm * p.amp * rootWeight * rootWeight * topFade * across;
+    }
+    return bend;
+  }
+
+  surfaceDisplacement(y) {
+    if (this.reduced || y <= 300 || y >= 420) return 0;
+    const envelope = Math.sin((y - 300) / 120 * Math.PI) ** 2;
+    return envelope * (Math.sin(this.t * 0.43 + y * 0.035) * 1.4
+      + Math.sin(this.t * 0.27 - y * 0.022) * 0.6);
+  }
+
+  resetBubble(b, source = null) {
+    const spot = source || this.sources[Math.floor(Math.random() * this.sources.length)];
+    const r = rand(1.5, 3.8);
+    Object.assign(b, { x: spot.x + rand(-14, 14), y: spot.y + rand(-3, 3),
+      originY: spot.y, r, speed: rand(12, 21), age: 0,
+      wobble: rand(0, TAU), wobbleAmp: rand(2, 5), depth: rand(0.3, 0.9),
+      delay: source ? 0 : rand(1, 9) });
+  }
+
+  // Emit only into an inactive slot: a fish breath must never teleport a visible bubble.
   bubbleAt(x, y, r = 2.5) {
-    let slot = this.bubbles[0];
-    for (const b of this.bubbles) if (b.y < slot.y) slot = b;
-    Object.assign(slot, { x, y, r, speed: 12 + r * 4, wobble: rand(0, TAU), wobbleAmp: rand(3, 6) });
+    const slot = this.bubbles.find(b => b.delay > 0);
+    if (!slot) return;
+    this.resetBubble(slot, { x, y });
+    slot.x = x; slot.y = y; slot.r = r;
+  }
+
+  readabilityAt(x, y, fish) {
+    let visibility = 1;
+    for (const f of fish) {
+      if (f.gone) continue;
+      const d = Math.hypot((x - f.x) / (f.w * 0.75), (y - f.y) / (f.h * 0.75));
+      visibility = Math.min(visibility, Math.max(0, Math.min(1, (d - 0.8) / 0.6)));
+    }
+    return visibility;
   }
 
   ripple(x, y, size = 1) {
@@ -54,7 +111,9 @@ class Effects {
   }
 
   splash(x, y, big = false) {
-    const n = big ? 22 : 10;
+    const n = this.reduced ? 4 : big ? 16 : 8;
+    const reaction = this.reactions.find(r => r.life <= 0) || this.reactions[0];
+    Object.assign(reaction, { x, age: 0, life: 1, strength: big ? 1 : 0.6 });
     let used = 0;
     for (const d of this.drops) {
       if (d.life > 0 || used >= n) continue;
@@ -63,6 +122,7 @@ class Effects {
       const v = big ? rand(220, 420) : rand(120, 240);
       Object.assign(d, { x: x + rand(-14, 14), y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, r: big ? rand(3, 7) : rand(2, 4.5), life: 1, decay: big ? 1.2 : 1.8 });
     }
+    this.bubbleAt(x, y + 22, 2);
     this.ripple(x, y, big ? 1.8 : 1);
     if (big) this.ripple(x + 20, y, 1.2);
   }
@@ -72,6 +132,7 @@ class Effects {
       for (const particle of pool) particle.life = 0;
     }
     this.dipBubbles = [];
+    for (const r of this.reactions) r.life = 0;
   }
 
   bubbleBurst(x, y) {
@@ -101,21 +162,39 @@ class Effects {
   update(dt) {
     this.t += dt;
     for (const b of this.dipBubbles || []) { b.y -= dt * 35; b.life -= dt; }
-    const top = this.waterline + 40;
-    for (let i = 0; i < this.bubbles.length; i += 1) {
-      const b = this.bubbles[i];
-      b.y -= b.speed * dt;
-      b.wobble += dt * 2.4;
-      b.x += Math.cos(b.wobble) * b.wobbleAmp * dt;
-      if (b.y < this.waterline + 14) this.bubbles[i] = this.newBubble(false);
+    const motion = this.reduced ? 0.2 : 1;
+    this.sourceIn -= dt;
+    if (this.sourceIn <= 0) {
+      const source = this.sources[Math.floor(Math.random() * this.sources.length)];
+      let count = this.reduced ? 1 : 2;
+      for (const b of this.bubbles) {
+        if (b.delay <= 0 || count <= 0) continue;
+        this.resetBubble(b, source);
+        b.delay = (count - 1) * 0.28;
+        count--;
+      }
+      this.sourceIn = rand(4, 8);
     }
-    for (const s of this.snow) {
-      s.phase += dt * 0.8;
-      s.x += (s.vx + Math.sin(s.phase) * 3) * dt;
-      s.y -= s.vy * dt;
-      if (s.y < top) { s.y = SEABED_Y; s.x = rand(0, STAGE_W); }
+    for (const b of this.bubbles) {
+      if (b.delay > 0) { b.delay -= dt * motion; continue; }
+      b.age += dt;
+      b.speed = Math.min(34, b.speed + dt * 0.7);
+      b.y -= b.speed * dt * motion;
+      b.wobble += dt * (0.65 + b.depth * 0.3);
+      b.x += Math.cos(b.wobble) * b.wobbleAmp * dt * motion;
+      if (b.y < this.waterline + 5) this.resetBubble(b);
+    }
+    for (const s of this.motes) {
+      s.phase += dt * 0.21;
+      s.x += (s.vx + Math.sin(s.phase) * 1.2) * dt * motion;
+      s.y -= s.vy * dt * motion;
+      if (s.y < this.waterline + 16) { s.y = SEABED_Y + 8; s.x = rand(0, STAGE_W); }
       if (s.x < -10) s.x = STAGE_W + 10;
       if (s.x > STAGE_W + 10) s.x = -10;
+    }
+    for (const r of this.reactions) {
+      if (r.life <= 0) continue;
+      r.age += dt; r.life = Math.max(0, 1 - r.age / 1.8);
     }
     for (const r of this.ripples) if (r.life > 0) r.life -= dt * 1.3;
     for (const d of this.drops) {
@@ -135,46 +214,53 @@ class Effects {
     }
   }
 
-  // Soft shafts of light reaching down from the surface, swaying slowly.
-  // Moving pools of light over the sand, on top of the painted caustic pattern.
-  // Light filtering through the surface: a wide, soft brightening that slowly breathes and
-  // drifts. It has no edges, so it reads as light rather than a drawn shape.
   drawLightWash(ctx, offsetX) {
-    if (this.reduced) return;
-    const top = this.waterline;
-    const pulse = 0.5 + Math.sin(this.t * 0.35) * 0.5;
     ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    const g = ctx.createLinearGradient(0, top, 0, top + 260);
-    g.addColorStop(0, `rgba(190, 235, 255, ${0.05 + pulse * 0.035})`);
-    g.addColorStop(1, 'rgba(190, 235, 255, 0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, top, STAGE_W, 260);
-    const hx = STAGE_W * 0.5 + Math.sin(this.t * 0.11) * 420 + offsetX * 0.6;
-    const r = ctx.createRadialGradient(hx, top, 0, hx, top, 900);
-    r.addColorStop(0, `rgba(200, 240, 255, ${0.045 + pulse * 0.03})`);
-    r.addColorStop(1, 'rgba(200, 240, 255, 0)');
-    ctx.fillStyle = r;
-    ctx.fillRect(0, top, STAGE_W, SEABED_Y - top);
+    ctx.globalCompositeOperation = 'screen';
+    for (const light of this.lights) {
+      const t = this.reduced ? 0 : this.t;
+      const phase = t * light.speed + light.phase;
+      const x = light.x + Math.sin(phase) * 95 + offsetX * 0.2;
+      const y = this.waterline + 100 + Math.cos(phase * 0.71) * 35;
+      const gradient = ctx.createRadialGradient(x, y, 20, x, y, 470);
+      gradient.addColorStop(0, `rgba(125, 210, 235, ${0.025 + Math.sin(phase * 0.83) * 0.008})`);
+      gradient.addColorStop(1, 'rgba(125, 210, 235, 0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, this.waterline, STAGE_W, STAGE_H - this.waterline);
+      // Broad, very faint pools on the painted sand, without tiled white patterns.
+      ctx.save();
+      ctx.translate(x, SEABED_Y + 48);
+      ctx.scale(1, 0.2);
+      const pool = ctx.createRadialGradient(0, 0, 5, 0, 0, 300);
+      pool.addColorStop(0, 'rgba(120, 225, 225, 0.055)');
+      pool.addColorStop(1, 'rgba(120, 225, 225, 0)');
+      ctx.fillStyle = pool;
+      ctx.fillRect(-300, -300, 600, 600);
+      ctx.restore();
+    }
     ctx.restore();
   }
 
-  drawWater(ctx, offsetX = 0) {
+  drawWater(ctx, offsetX = 0, fish = []) {
     const top = this.waterline + 12;
     ctx.save();
     ctx.beginPath();
-    ctx.rect(0, top, STAGE_W, SEABED_Y + 30 - top);
+    ctx.rect(0, top, STAGE_W, STAGE_H - top);
     ctx.clip();
     this.drawLightWash(ctx, offsetX);
-    for (const s of this.snow) {
-      ctx.fillStyle = `rgba(215, 240, 255, ${s.a})`;
+    for (const s of this.motes) {
+      const x = s.x + offsetX * s.depth;
+      const edgeFade = Math.min(1, Math.max(0, (s.y - top) / 40), Math.max(0, (SEABED_Y + 12 - s.y) / 40));
+      ctx.fillStyle = `rgba(170, 215, 230, ${s.a * edgeFade * this.readabilityAt(x, s.y, fish)})`;
       ctx.beginPath();
-      ctx.arc(s.x + offsetX, s.y, s.r, 0, TAU);
+      ctx.arc(x, s.y, s.r, 0, TAU);
       ctx.fill();
     }
     for (const b of this.bubbles) {
-      const x = b.x + offsetX;
-      const fade = Math.min(1, (b.y - this.waterline - 14) / 30);
+      if (b.delay > 0) continue;
+      const x = b.x + offsetX * b.depth;
+      const fade = Math.max(0, Math.min(1, b.age * 2, (b.y - this.waterline - 5) / 35))
+        * this.readabilityAt(x, b.y, fish);
       ctx.beginPath();
       ctx.arc(x, b.y, b.r, 0, TAU);
       ctx.fillStyle = `rgba(220, 245, 255, ${0.16 * fade})`;
@@ -229,15 +315,51 @@ class Effects {
     }
   }
 
-  // A light veil over anything below the surface, so the raft and paddle look afloat.
-  drawDepthVeil(ctx) {
-    const y = this.waterline;
-    const g = ctx.createLinearGradient(0, y, 0, y + 70);
-    g.addColorStop(0, 'rgba(70, 180, 240, 0.55)');
-    g.addColorStop(1, 'rgba(20, 110, 220, 0.15)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, y, STAGE_W, 70);
+  drawSurface(ctx, raftX) {
+    ctx.save();
+    ctx.lineCap = 'round';
+    // Small highlights close to the raft, with separate periods and no full-width overlay.
+    for (let i = 0; i < 3; i++) {
+      const t = this.reduced ? 0 : this.t;
+      const phase = t * (0.37 + i * 0.053) + i * 2.1;
+      const x = raftX - 140 + i * 155 + Math.sin(phase) * 9;
+      ctx.strokeStyle = `rgba(225,250,255,${0.07 + 0.035 * Math.sin(phase)})`;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.ellipse(x, this.waterline + 4 + this.raftResponse(x) * 0.6, 34 + Math.cos(phase) * 5, 3, 0, 0, Math.PI);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
+
+  raftResponse(x) {
+    if (this.reduced) return 0;
+    let displacement = 0;
+    for (const r of this.reactions) {
+      if (r.life <= 0 || r.age < 0.12) continue;
+      const proximity = Math.max(0, 1 - Math.abs(x - r.x) / 370);
+      const t = r.age - 0.12;
+      displacement += Math.sin(t * 8) * Math.exp(-t * 3) * 1.4 * proximity * r.strength;
+    }
+    return displacement;
+  }
+
+  // Tint only the immersed raft contact, fading all the way to transparent.
+  // Popo's submerged body already has its own waterline clipping.
+  drawDepthVeil(ctx, popo) {
+    const p = popo.placement('fishing', 'idle');
+    const y = this.waterline;
+    const g = ctx.createLinearGradient(0, y, 0, y + 30);
+    g.addColorStop(0, 'rgba(55, 160, 220, 0.24)');
+    g.addColorStop(1, 'rgba(55, 160, 220, 0)');
+    ctx.save();
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.ellipse((p.raftLeftX + p.raftRightX) / 2, y, (p.raftRightX - p.raftLeftX) / 2 + 8, 26, 0, 0, Math.PI);
+    ctx.fill();
+    ctx.restore();
+  }
+
 }
 
 Object.assign(PopoGame, { Effects });

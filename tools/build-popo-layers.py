@@ -62,7 +62,8 @@ atlas = Image.new('RGBA', (836,418))
 for i, layer in enumerate((raft,rod)):
     atlas.alpha_composite(layer, (i*418,0))
 atlas.save(ROOT / 'assets/sprites/popo-props.webp', lossless=True)
-Image.open(ROOT / 'asset/popo-mishap-poses.png').save(
-    ROOT / 'assets/sprites/popo-mishap-poses.webp', quality=95, method=6)
+for version in ('', '-v2'):
+    Image.open(ROOT / f'asset/popo-mishap-poses{version}.png').save(
+        ROOT / f'assets/sprites/popo-mishap-poses{version}.webp', quality=95, method=6)
 if __name__ == '__main__':
     print('Wrote registered raft/bucket and rod layers (418 × 418 each).')

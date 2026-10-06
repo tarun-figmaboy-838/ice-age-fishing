@@ -112,9 +112,9 @@ async function correctCatch(game, fish) {
     audio.duck(2200);
     audio.play('success');
     ui.showReward(fish.shape);
-    await game.waitForContinue(token);
+    await clock.wait(3800, token);
     ui.hideReward();
-    await clock.wait(300, token);
+    await clock.wait(400, token);
     game.nextChallenge();
   } catch (e) {
     swallow(e);
@@ -122,8 +122,8 @@ async function correctCatch(game, fish) {
 }
 
 // Durations use game time, so pause freezes the whole mishap, including its effects.
-const WRONG = { acknowledge: 160, tug: 220, brace: 320, doubleTake: 120, hang: 70, fall: 420,
-  dipIn: 180, dip: 300, emerge: 420, reach: 240, climb: 460, seat: 280, wet: 240, grip: 260 };
+const WRONG = { acknowledge: 160, tug: 220, yank: 170, slack: 210, brace: 320, doubleTake: 140, hang: 100, fall: 380,
+  dipIn: 160, dip: 300, emerge: 340, blink: 100, reach: 240, climb: 420, seat: 260, wet: 300, grip: 260, smile: 160 };
 
 async function wrongCatch(game, fish) {
   if (state.phase !== PHASE.READY) return;
@@ -174,11 +174,40 @@ async function wrongCatch(game, fish) {
       m.rodBend = 0.035 * k;
       popo.line.tension = 1.4;
     });
+    // tug-of-war: three yanks, each harder; the fish darts off and Popo jolts after it
+    for (let i = 1; i <= 3; i += 1) {
+      const strength = i / 3;
+      const dart = pull + 26 * i;
+      const jolt = 9 + 14 * i;
+      sound('tug');
+      fish.wiggle();
+      await clock.tween(WRONG.yank, token, (t) => {
+        const k = ease.out(t);
+        fish.x = home.x + pull + (dart - pull) * k;
+        fish.y = home.y + Math.sin(k * Math.PI) * 10 * (i % 2 ? 1 : -1);
+        m.x = 9 + (jolt - 9) * k;
+        m.y = -6 * Math.sin(k * Math.PI) * strength;
+        m.angle = (0.045 + 0.07 * strength * k) * rotation;
+        m.rodBend = 0.035 + 0.05 * strength * k;
+        m.raftAngle = (reduced ? 0 : 0.012 * strength * k);
+        popo.line.tension = 1.6 + strength;
+      });
+      await clock.tween(WRONG.slack, token, (t) => {
+        const k = ease.inOut(t);
+        fish.x = dart + (home.x + pull - dart) * k * 0.6;
+        fish.y = home.y;
+        m.x = jolt + (9 + 4 * i - jolt) * k;
+        m.angle = (0.045 + 0.07 * strength * (1 - k * 0.5)) * rotation;
+        m.raftAngle *= 1 - 0.5 * k;
+        popo.line.tension = 1.2;
+      });
+    }
     state.phase = PHASE.LOSING_BALANCE;
     // One small double-take, then the comic beat before gravity wins.
     await clock.tween(WRONG.doubleTake, token, (t) => {
       m.angle = (0.045 - Math.sin(t * Math.PI) * 0.075) * rotation;
     });
+    popo.setMishapPose('brace', 'hand');
     await move(WRONG.brace, { x: fallX * 0.38, y: -8, angle: 0.16 * rotation,
       rodBend: 0.06, raftAngle: reduced ? 0 : 0.008 });
 
@@ -200,7 +229,7 @@ async function wrongCatch(game, fish) {
         released = { ...popo.mishapRod() };
         releasedHook = { ...popo.line.hook };
         m.rod = { ...released };
-        popo.setMishapPose('slip');
+        popo.setMishapPose('slip', 'head');
         popo.line.mode = 'slack';
         popo.line.tension = 0;
       }
@@ -237,21 +266,27 @@ async function wrongCatch(game, fish) {
     state.phase = PHASE.RESURFACING;
     sound('recover');
     await move(WRONG.emerge, { y: game.waterline - headY - 85 });
-    fx.ripple(popo.mishapBodyPoint(200, 220).x, game.waterline, 0.7);
+    fx.ripple(popo.bodyLandmark('head').x, game.waterline, 0.7);
+    // Puff-cheek pop, blink, then an eager look toward the raft.
+    popo.setMishapPose('blink', 'head');
+    sound('puff');
+    await clock.wait(WRONG.blink, token);
+    popo.setMishapPose('surface', 'head');
     await reelLineHome(game, token);
     state.phase = PHASE.RECOVERING;
     popo.setMishapPose('climb', 'head');
     // Approach the edge, lift onto the deck, then scoot back to the registered seat.
     await move(WRONG.reach, { x: fallX * 0.7, angle: -0.12 * rotation });
     await move(WRONG.climb, { x: fallX * 0.42, y: -15, angle: -0.08 * rotation });
-    popo.setMishapPose('wet');
+    popo.setMishapPose('shake', 'head');
     await move(WRONG.seat, { x: 0, y: 0, angle: 0, raftAngle: 0, rodBend: 0 });
     fx.drips(popo.mishapBodyPoint(190, 230));
     sound('drip');
     await clock.tween(WRONG.wet, token, (t) => {
-      m.angle = Math.sin(t * Math.PI * 4) * 0.026 * (1 - t) * rotation;
+      m.angle = Math.sin(t * Math.PI * 4) * 0.045 * (1 - t) * rotation;
       m.y = -Math.sin(t * Math.PI * 2) * 3 * (1 - t) * rotation;
     });
+    popo.setMishapPose('wet', 'head');
     const restingRod = { ...m.rod };
     await clock.tween(WRONG.grip, token, (t) => {
       const k = ease.inOut(t);
@@ -261,6 +296,7 @@ async function wrongCatch(game, fish) {
       m.rod.angle = restingRod.angle * (1 - k);
       fish.x = home.x + pull * (1 - k);
     });
+    await clock.wait(WRONG.smile, token);
     popo.endMishap();
     fish.x = home.x;
     fish.y = home.y;
@@ -303,16 +339,39 @@ async function travelTo(game, nextIndex) {
     audio.setTravel(true);
     const fromWater = game.waterline;
     const toWater = game.locationWaterline(nextIndex);
-    await clock.tween(fx.reduced ? 1800 : 3600, token, (t) => {
+    const duration = fx.reduced ? 2400 : 5400;
+    const stroke = 900;
+    let strokes = 0;
+    let lastWake = 0;
+    await clock.tween(duration, token, (t) => {
       const k = ease.inOut(t);
       game.transition.k = k;
-      popo.travelShift = Math.sin(t * Math.PI) * 26;
       game.setWaterline(fromWater + (toWater - fromWater) * k);
+      const elapsed = t * duration;
+      const phase = (elapsed % stroke) / stroke;
+      // every pull drives the raft forward and lifts the bow a little; it settles as the blade lifts
+      const surge = Math.max(0, Math.sin(phase * Math.PI * 2 - Math.PI / 2));
+      const pace = Math.sin(t * Math.PI);
+      popo.travelShift = pace * (18 + surge * 24);
+      popo.tilt = -pace * (0.012 + surge * 0.014);
+      const cycle = Math.floor(elapsed / stroke);
+      if (cycle > strokes && t < 0.9) {
+        strokes = cycle;
+        const edge = popo.raftRight();
+        fx.splash(edge.x + 36, game.waterline, false);
+        audio.play('paddle');
+      }
+      if (elapsed - lastWake > 380 && t > 0.06 && t < 0.94) {
+        lastWake = elapsed;
+        const stern = popo.placement(popo.pose.sheet, popo.pose.frame).raftLeftX + popo.travelShift;
+        fx.ripple(stern - 12, game.waterline + 6, 0.7);
+      }
     });
     game.finishTransition(nextIndex);
     audio.setTravel(false);
     popo.idle();
     popo.travelShift = 0;
+    popo.tilt = 0;
     await clock.wait(350, token);
     game.setupChallenge();
   } catch (e) {

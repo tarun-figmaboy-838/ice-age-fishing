@@ -2,7 +2,7 @@
 'use strict';
 const { SHEET_DATA, FISH_ATLAS } = PopoGame;
 
-const BACKGROUNDS = [1, 2, 3, 4].map((n) => `assets/backgrounds/location-${n}.webp`);
+const BACKGROUNDS = PopoGame.BACKGROUND_DATA || [1, 2, 3, 4].map((n) => `assets/backgrounds/location-${n}.webp`);
 
 const assets = {
   backgrounds: [],
@@ -39,7 +39,7 @@ async function loadCoreAssets() {
     loadImage('assets/sprites/fish.webp'),
     preloadBackground(0),
     loadImage('assets/sprites/popo-props.webp'),
-    loadImage('assets/sprites/popo-mishap-poses.webp'),
+    loadImage('assets/sprites/popo-mishap-poses-v2.webp'),
   ]);
   assets.props = props;
   assets.mishapPoses = mishapPoses;

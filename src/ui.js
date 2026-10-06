@@ -59,10 +59,10 @@ class UI {
       locationName: $('location-name'), progress: $('location-progress'),
       instruction: $('instruction'), instructionIcon: $('instruction-icon'), instructionText: $('instruction-text'),
       sound: $('btn-sound'), pause: $('btn-pause'), collectionCount: $('collection-count'), badges: $('collection-badges'),
-      reward: $('overlay-reward'), rewardFish: $('reward-fish'), rewardImg: $('reward-fish-img'), rewardName: $('reward-name'), rewardFact: $('reward-fact'), cont: $('btn-continue'),
+      reward: $('overlay-reward'), rewardFish: $('reward-fish'), rewardImg: $('reward-fish-img'), rewardName: $('reward-name'), rewardFact: $('reward-fact'),
       pauseOverlay: $('overlay-pause'), resume: $('btn-resume'), restart: $('btn-restart'),
       summary: $('overlay-summary'), summaryList: $('summary-list'), playAgain: $('btn-play-again'),
-      rotate: $('rotate-hint'), world: $('world'),
+      rotate: $('rotate-hint'), scene: $('scene'),
     };
     this.handlers = {};
     this.hitButtons = new Map();
@@ -74,7 +74,6 @@ class UI {
     this.el.pause.addEventListener('click', h('pause'));
     this.el.resume.addEventListener('click', h('resume'));
     this.el.restart.addEventListener('click', h('restart'));
-    this.el.cont.addEventListener('click', h('continue'));
     this.el.playAgain.addEventListener('click', h('playAgain'));
     this.el.rewardFish.addEventListener('click', () => {
       this.el.rewardFish.classList.remove('bounce');
@@ -151,7 +150,7 @@ class UI {
   }
 
   setWorldBlur(on) {
-    this.el.world.classList.toggle('blurred', on);
+    this.el.scene.classList.toggle('blurred', on);
   }
 
   // --- fish hit targets -------------------------------------------------
@@ -221,12 +220,13 @@ class UI {
     this.el.rewardFact.innerHTML = `<span>${lines[0]}</span><span>${lines[1]}</span><em>${sideFact(shape)}</em>`;
     this.el.reward.hidden = false;
     this.el.reward.classList.remove('leave');
+    this.el.hud.classList.add('prize');
     this.setWorldBlur(true);
-    this.el.cont.focus({ preventScroll: true });
   }
 
   hideReward() {
     this.el.reward.classList.add('leave');
+    this.el.hud.classList.remove('prize');
     this.setWorldBlur(false);
     setTimeout(() => { this.el.reward.hidden = true; }, 400);
   }

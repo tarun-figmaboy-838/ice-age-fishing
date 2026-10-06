@@ -236,6 +236,7 @@ class AudioEngine {
         break;
       case 'tug': this.tone({ freq: 230, to: 150, type: 'triangle', dur: 0.22, gain: 0.18 }); break;
       case 'slip': this.tone({ freq: 950, to: 280, dur: 0.38, gain: 0.14 }); break;
+      case 'puff': this.tone({ freq: 420, to: 740, dur: 0.09, gain: 0.075 }); this.noise({ dur: 0.06, type: 'lowpass', freq: 750, gain: 0.04 }); break;
       case 'bubbles': seq([360, 480, 620], 0.07, { type: 'sine', dur: 0.07, gain: 0.045 }); break;
       case 'drip': this.tone({ freq: 1100, to: 550, dur: 0.09, gain: 0.05 }); break;
       case 'recover': this.tone({ freq: 380, to: 820, dur: 0.1, gain: 0.14 }); this.tone({ freq: 180, to: 240, t: now + 0.1, type: 'triangle', dur: 0.16, gain: 0.1 }); break;

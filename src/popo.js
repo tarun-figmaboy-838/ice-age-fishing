@@ -16,14 +16,16 @@ const SHEETS = {
 
 // Manually inspected pose extents, torso registrations and attachment landmarks.
 // One atlas-wide scale preserves the generated character's proportions in every pose.
-const MISHAP_SCALE = 0.414;
+const MISHAP_SCALE = 0.445;
 const MISHAP_POSES = {
-  ready: { box: [55, 24, 486, 487], pivot: [280, 390], hand: [401, 331], head: [335, 90], top: [300, 42], contact: [270, 481] },
-  surprise: { box: [554, 24, 985, 487], pivot: [792, 390], hand: [906, 332], head: [852, 95], top: [817, 47], contact: [775, 480] },
-  slip: { box: [1050, 24, 1520, 453], pivot: [1265, 335], hand: [1450, 280], head: [1390, 90], top: [1350, 43], contact: [1270, 426] },
-  surface: { box: [95, 487, 435, 1005], pivot: [260, 869], hand: [326, 738], head: [309, 550], top: [274, 490], contact: [280, 982] },
-  climb: { box: [520, 515, 1015, 985], pivot: [845, 847], hand: [574, 700], head: [728, 588], top: [757, 530], contact: [943, 960] },
-  wet: { box: [1058, 515, 1500, 992], pivot: [1280, 887], hand: [1387, 812], head: [1342, 590], top: [1298, 531], contact: [1255, 968] },
+  surprise: { box: [35, 0, 430, 440], pivot: [250, 344], hand: [353, 281], head: [285, 92], top: [240, 22], contact: [225, 427] },
+  brace: { box: [478, 10, 880, 439], pivot: [695, 344], hand: [802, 281], head: [763, 97], top: [717, 30], contact: [690, 426] },
+  slip: { box: [921, 0, 1368, 433], pivot: [1100, 300], hand: [1320, 219], head: [1235, 90], top: [1190, 13], contact: [1140, 409] },
+  surface: { box: [1433, 0, 1726, 448], pivot: [1570, 365], hand: [1655, 255], head: [1610, 76], top: [1575, 10], contact: [1530, 441] },
+  blink: { box: [105, 440, 402, 887], pivot: [250, 810], hand: [333, 694], head: [290, 523], top: [243, 451], contact: [215, 881] },
+  climb: { box: [464, 438, 930, 869], pivot: [765, 744], hand: [505, 594], head: [650, 521], top: [697, 449], contact: [800, 847] },
+  shake: { box: [950, 439, 1335, 878], pivot: [1140, 780], hand: [1220, 704], head: [1165, 520], top: [1100, 454], contact: [1160, 854] },
+  wet: { box: [1366, 445, 1763, 887], pivot: [1555, 791], hand: [1670, 727], head: [1620, 541], top: [1580, 460], contact: [1510, 869] },
 };
 
 function frameData(sheet, name) {
@@ -49,6 +51,8 @@ class Popo {
     this.line = { visible: true, mode: 'dangle', hook: { x: 0, y: 0 }, arc: 0, tension: 0, length: 150 };
     this.swayT = 0;
     this.mishap = null;
+    this.waterResponse = 0;
+    this.reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
   setAnchor(x, y) {
@@ -79,7 +83,15 @@ class Popo {
   }
 
   update(dt) {
-    if (this.mishap) { this.swayT += dt * 1.6; return; }
+    if (this.mishap) {
+      this.swayT += dt * 1.6;
+      const m = this.mishap;
+      m.poseAge = Math.min(1, m.poseAge + dt / 0.12);
+      const settle = (1 - m.poseAge) ** 2;
+      m.poseShift.x = m.poseShiftFrom.x * settle;
+      m.poseShift.y = m.poseShiftFrom.y * settle;
+      return;
+    }
     this.bobT += dt * 1.1;
     this.swayT += dt * 1.6;
     if (this.fade < 1) this.fade = Math.min(1, this.fade + (dt * 1000) / this.fadeMs);
@@ -116,7 +128,8 @@ class Popo {
   }
 
   get bob() {
-    return Math.sin(this.bobT) * 3 + this.dip;
+    return (Math.sin(this.bobT * 1.65) * 1.9 + Math.sin(this.bobT * 1.07 + 0.8) * 0.65)
+      * (this.reduced ? 0.2 : 1) + this.dip + this.waterResponse;
   }
 
   placement(sheet, name) {
@@ -141,7 +154,7 @@ class Popo {
   // Tilt pivots on the raft's right end at the waterline, so a lean looks like the raft dipping.
   pivot() {
     const p = this.placement(this.pose.sheet, this.pose.frame);
-    return { x: p.raftRightX, y: this.anchor.y, angle: this.tilt + Math.sin(this.bobT * 0.7) * 0.004 };
+    return { x: p.raftRightX, y: this.anchor.y, angle: this.tilt + (Math.sin(this.bobT * 1.13) * 0.0027 + Math.sin(this.bobT * 0.71 + 1.3) * 0.001) * (this.reduced ? 0.2 : 1) };
   }
 
   applyTransform(ctx) {
@@ -201,7 +214,7 @@ class Popo {
     ctx.globalAlpha = 1;
   }
 
-  // All three parts retain the source cell and its seat registration. No per-part scaling.
+  // Props retain their source registration; all generated poses share one physical scale.
   beginMishap(waterline) {
     this.stopFrames();
     this.pose = { sheet: 'fishing', frame: 'idle' };
@@ -210,6 +223,7 @@ class Popo {
     this.mishap = {
       x: 0, y: 0, angle: 0, raftAngle: 0, rodBend: 0,
       waterline, bob: this.bob, rod: null, pose: 'surprise',
+      poseShift: { x: 0, y: 0 }, poseShiftFrom: { x: 0, y: 0 }, poseAge: 1,
     };
   }
 
@@ -231,27 +245,34 @@ class Popo {
     const f = MISHAP_POSES[m.pose];
     const [x, y] = f[name];
     const origin = this.mishapBodyPoint(178, 300);
-    const dx = (x - f.pivot[0]) * MISHAP_SCALE;
-    const dy = (y - f.pivot[1]) * MISHAP_SCALE;
+    const dx = (x - f.pivot[0]) * MISHAP_SCALE + m.poseShift.x;
+    const dy = (y - f.pivot[1]) * MISHAP_SCALE + m.poseShift.y;
     return { x: origin.x + dx * Math.cos(m.angle) - dy * Math.sin(m.angle),
       y: origin.y + dx * Math.sin(m.angle) + dy * Math.cos(m.angle) };
   }
 
   setMishapPose(pose, align = null) {
+    const m = this.mishap;
+    if (m.pose === pose) return;
     const before = align ? this.bodyLandmark(align) : null;
-    this.mishap.pose = pose;
+    m.pose = pose;
     if (before) {
       const after = this.bodyLandmark(align);
-      this.mishap.x += before.x - after.x;
-      this.mishap.y += before.y - after.y;
+      const dx = before.x - after.x, dy = before.y - after.y;
+      // Preserve the attachment on the switching frame, then settle its registration.
+      // This never crossfades bodies or changes the physical sprite scale.
+      m.poseShift.x += dx * Math.cos(m.angle) + dy * Math.sin(m.angle);
+      m.poseShift.y += -dx * Math.sin(m.angle) + dy * Math.cos(m.angle);
     }
+    m.poseShiftFrom = { ...m.poseShift };
+    m.poseAge = 0;
   }
 
   drawMishapBody(ctx) {
     const m = this.mishap;
     const f = MISHAP_POSES[m.pose];
     const [x0, y0, x1, y1] = f.box;
-    const origin = this.mishapBodyPoint(178, 300);
+    const origin = this.bodyLandmark('pivot');
     ctx.save();
     ctx.translate(origin.x, origin.y);
     ctx.rotate(m.angle);
@@ -263,7 +284,8 @@ class Popo {
 
   mishapRod() {
     const m = this.mishap;
-    return m.rod || { ...this.bodyLandmark('hand'), angle: m.angle + m.rodBend };
+    return m.rod ? { ...m.rod, y: m.rod.y + this.waterResponse }
+      : { ...this.bodyLandmark('hand'), angle: m.angle + m.rodBend };
   }
 
   mishapRodPoint(x, y) {
@@ -294,8 +316,9 @@ class Popo {
     ctx.filter = 'sepia(0.5) hue-rotate(145deg) saturate(1.5)';
     drawBody();
     ctx.restore();
-    this.drawMishapLayer(ctx, 0, { x: 186, y: 383 },
-      this.sourcePoint(186, 383), m.raftAngle);
+    const raft = this.sourcePoint(186, 383);
+    raft.y += this.waterResponse;
+    this.drawMishapLayer(ctx, 0, { x: 186, y: 383 }, raft, m.raftAngle);
     const rod = this.mishapRod();
     this.drawMishapLayer(ctx, 1, { x: 229, y: 268 }, rod, rod.angle);
     ctx.save();

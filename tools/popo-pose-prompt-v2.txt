@@ -1,0 +1,17 @@
+Generated with the built-in image_gen tool, using asset/popo-mishap-poses.png as the identity reference derived from the user's supplied Popo image.
+Source: asset/popo-mishap-poses-v2.png
+Runtime: assets/sprites/popo-mishap-poses-v2.webp
+
+Use case: stylized-concept. Create ONE new production sprite atlas for the Popo children's fishing game, using the attached existing Popo sheet as the strict character identity reference. Upgrade the ACTING: big readable eyebrows, funny cheek shapes, cheeky smiles, clear paw gestures and delightful cartoon timing poses. Do not redesign Popo: identical cream-white fluffy fur, blue eyes, black nose, swept hair tuft, soft round muzzle, chunky paws, black pads, body proportions and warm polished 3D lighting.
+Exactly EIGHT complete separate full-body sprites in a FOUR-column by TWO-row layout. Landscape 2048 x 1024 transparent canvas if possible. Every cell 512 x 512, ample clear padding, absolutely no overlap. SAME physical scale, same head diameter, same three-quarter camera angle in all cells; do not zoom poses to fill cells. Full character including hair, hands and feet. Each pose should occupy about 360 pixels of height, with breathing room.
+Read row-major:
+1. SURPRISE: seated facing RIGHT with rear feet forward and both forepaws together gripping an INVISIBLE rod. Eyebrows jump high, blue eyes wide, tiny rounded 'oh!' mouth. Funny bafflement, never fear.
+2. BRACE: same seated anchor facing RIGHT, leaning forward slightly with shoulders hunched, elbows bent and both paws holding the invisible rod; raised asymmetric eyebrows and a funny determined tight-lipped grin, rear toes lifted slightly.
+3. SLIP: briefly airborne facing RIGHT, body compact at a slight forward angle, front paws thrown outward in a readable 'whoops!', rear feet kick up, surprised open O mouth, comical wide eyes. Exactly two front paws and two hind paws; no distress.
+4. RESURFACE: upright full-body pose, facing RIGHT, paws near chest, cheeks puffed and lips pursed as if gently blowing a bubble, raised eyebrow and curious blue eyes. Render whole body with no water.
+5. BLINK: precisely same body silhouette, registration and upright pose as frame 4 but eyes squeezed closed with a cheerful goofy smile, cheeks relaxed. This is a two-frame blink/reaction pair.
+6. CLIMB: body faces right in side view but turns head LEFT toward the raft, both front paws reach LEFT at shoulder level to pull onto an imaginary edge, rear legs tucked. Happy determined smile. Full anatomy.
+7. SHAKE: seated feet forward, eyes happily closed, cheeks lifted, fluffy tuft playfully ruffled, forepaws held at chest while shaking off imaginary water. NO droplets drawn. Same body scale as frame 1.
+8. SHEEPISH SMILE: seated feet forward facing RIGHT, looks slightly toward the viewer with a warm lopsided embarrassed grin, one eyebrow lifted, paws together ready for the invisible rod. Same body scale and seated anchor as frame 1.
+All expressions appealing, genuinely funny and affectionate, readable when reduced to a small game character, polished family animation acting. Use varied emotional acting, not eight generic smiles. Keep a stable torso and head size for smooth animation.
+BACKGROUND MUST BE TRUE TRANSPARENT ALPHA. Do not paint halos, fog, shadows, backdrop or checkers. NO boats, raft, bucket, fishing rods, hooks, lines, water, splashes, bubbles, text, labels, borders, props, clothing, duplicates, motion trails or extra limbs. Use ONLY character artwork, clean antialiased fur edges.

@@ -1,19 +1,9 @@
 (function (PopoGame) {
 'use strict';
-const { assets, preloadBackground, clock, Effects, spawnFish, LOCATIONS, matchesTarget, getShape, Popo, correctCatch, wrongCatch, travelTo, tutorial, mouthOf, STAGE_W, STAGE_H, swimArea, raftAnchor, state, PHASE, resetProgress, newToken, isCurrent } = PopoGame;
+const { assets, preloadBackground, clock, Effects, WaterScene, spawnFish, LOCATIONS, matchesTarget, getShape, Popo, correctCatch, wrongCatch, travelTo, tutorial, mouthOf, STAGE_W, STAGE_H, swimArea, raftAnchor, state, PHASE, resetProgress, newToken, isCurrent } = PopoGame;
 
 const HINT_DELAY = 4;
 
-// Each background is treated as three depth layers. During a row the far layer travels
-// less than the near layer (parallax), and at rest the far and near layers drift a little
-// against the water so the scene never sits perfectly still. Feather widths double as the
-// per-layer blend into the next location's artwork.
-const BANDS = [
-  { top: 0, bottom: 340, feather: 640, drift: 1 },
-  { top: 340, bottom: 640, feather: 320, drift: 0, wobble: { from: 346, to: 404, amp: 2.2, step: 6, flow: 9 } },
-  { top: 640, bottom: STAGE_H, feather: 120, drift: -0.7, wobble: { from: 700, to: STAGE_H, amp: 2.6, step: 8 } },
-];
-const BAND_PAD = 14;
 
 class Game {
   constructor({ stage, ui, audio }) {
@@ -22,13 +12,12 @@ class Game {
     this.audio = audio;
     this.popo = new Popo();
     this.fx = new Effects();
+    this.water = new WaterScene(document.getElementById('water'));
     this.waterline = LOCATIONS[0].waterline;
     this.area = swimArea(this.waterline);
     this.transition = null;
-    this.feathered = null;
     this.handFish = null;
     this.instructionRevert = 0;
-    this.continueResolver = null;
     this.lastFrame = 0;
     this.running = false;
     ui.setScale(stage.scale);
@@ -66,7 +55,6 @@ class Game {
     this.fx.clearTransient();
     this.audio.stopEffects();
     this.instructionRevert = 0;
-    this.continueResolver = null;
     this.transition = null;
     this.ui.hideReward();
     this.ui.hideSummary();
@@ -90,7 +78,6 @@ class Game {
     this.running = false;
     newToken();
     clock.cancelAll();
-    this.continueResolver = null;
     this.transition = null;
     this.handFish = null;
     this.instructionRevert = 0;
@@ -107,6 +94,7 @@ class Game {
   applyLocation() {
     const loc = LOCATIONS[state.locationIndex];
     this.setWaterline(loc.waterline);
+    this.fx.setLocation(loc.background);
     this.ui.setLocation(loc.name, state.challengeIndex, loc.challenges.length);
     if (state.locationIndex + 1 < LOCATIONS.length) preloadBackground(LOCATIONS[state.locationIndex + 1].background);
   }
@@ -172,21 +160,6 @@ class Game {
     this.ui.setLocation(LOCATIONS[state.locationIndex].name, state.challengeIndex + 1, LOCATIONS[state.locationIndex].challenges.length);
   }
 
-  waitForContinue(token) {
-    return new Promise((resolve) => {
-      this.continueResolver = () => { if (isCurrent(token)) resolve(); };
-    });
-  }
-
-  onContinue() {
-    this.audio.play('ui');
-    if (this.continueResolver) {
-      const r = this.continueResolver;
-      this.continueResolver = null;
-      r();
-    }
-  }
-
   // --- input ----------------------------------------------------------------
   // Hit targets are larger than the fish, so when two overlap the fish whose body is
   // nearest the pointer wins rather than whichever button happens to be on top.
@@ -247,6 +220,12 @@ class Game {
     this.stage.resize();
     this.ui.setScale(this.stage.scale);
     this.ui.showRotateHint(this.stage.portrait);
+    this.syncWaterCanvas();
+  }
+
+  syncWaterCanvas() {
+    const c = this.stage.canvas;
+    this.water.resize(c.width, c.height, c.style.width, c.style.height);
   }
 
   // Shows feedback for a while, then brings the challenge instruction back.
@@ -287,34 +266,12 @@ class Game {
 
   // --- travel -----------------------------------------------------------------
   async prepareTransition(nextIndex) {
-    const img = await preloadBackground(LOCATIONS[nextIndex].background);
-    const c = document.createElement('canvas');
-    c.width = STAGE_W;
-    c.height = STAGE_H;
-    const ctx = c.getContext('2d');
-    ctx.drawImage(img, 0, 0, STAGE_W, STAGE_H);
-    const mask = document.createElement('canvas');
-    mask.width = STAGE_W;
-    mask.height = STAGE_H;
-    const m = mask.getContext('2d');
-    for (const band of BANDS) {
-      const g = m.createLinearGradient(0, 0, band.feather, 0);
-      g.addColorStop(0, 'rgba(0,0,0,0)');
-      g.addColorStop(1, 'rgba(0,0,0,1)');
-      m.fillStyle = g;
-      m.fillRect(0, band.top, band.feather, band.bottom - band.top);
-      m.fillStyle = '#000';
-      m.fillRect(band.feather, band.top, STAGE_W - band.feather, band.bottom - band.top);
-    }
-    ctx.globalCompositeOperation = 'destination-in';
-    ctx.drawImage(mask, 0, 0);
-    this.feathered = c;
+    await preloadBackground(LOCATIONS[nextIndex].background);
     this.transition = { from: state.locationIndex, to: nextIndex, k: 0 };
   }
 
   finishTransition(nextIndex) {
     this.transition = null;
-    this.feathered = null;
     state.locationIndex = nextIndex;
     state.challengeIndex = 0;
     this.applyLocation();
@@ -334,10 +291,11 @@ class Game {
     clock.update(dt);
     this.popo.update(dt);
     this.fx.update(dt);
+    this.popo.waterResponse = this.fx.raftResponse(this.popo.anchor.x);
     for (const f of state.fish) {
       f.update(dt, this.area, state.fish);
-      if (f.breath <= 0 && !f.gone) {
-        f.breath = 3 + Math.random() * 5;
+      if (f.breath <= 0 && !f.gone && !f.frozen && !f.escaping) {
+        f.breath = 8 + Math.random() * 9;
         this.fx.bubbleAt(f.x + f.dir * f.w * 0.42, f.y - f.h * 0.05, 1.6 + Math.random() * 1.4);
       }
     }
@@ -351,77 +309,98 @@ class Game {
     this.updateInstruction(dt);
   }
 
-  drawBand(ctx, img, band, ox) {
-    const h = Math.min(STAGE_H, band.bottom + 3) - band.top;
-    ctx.drawImage(img, 0, band.top, STAGE_W, h, ox - BAND_PAD, band.top, STAGE_W + BAND_PAD * 2, h);
-    // water refraction: thin strips of the surface texture and the seabed sway sideways
-    const w = band.wobble;
-    if (!w || this.fx.reduced) return;
-    const t = this.fx.t;
-    for (let y = w.from; y < w.to; y += w.step) {
-      const depth = (y - w.from) / (w.to - w.from);
-      const dx = Math.sin(t * 1.1 + y * 0.045) * w.amp * (0.4 + depth) + Math.sin(t * 0.7 - y * 0.02) * w.amp * 0.5
-        + (w.flow ? Math.sin(t * 0.21) * w.flow * (1 - depth * 0.5) : 0);
-      const sh = Math.min(w.step, w.to - y);
-      ctx.drawImage(img, 0, y, STAGE_W, sh, ox - BAND_PAD + dx, y, STAGE_W + BAND_PAD * 2, sh);
-    }
-  }
-
-  // Returns the water layer's horizontal offset so the underwater effects can follow it.
+  // The painting goes through the per-pixel water pass (src/water.js); without WebGL it is
+  // drawn plainly. Returns the ambient drift the underwater effects follow during a row.
   drawBackground(ctx) {
     const index = LOCATIONS[state.locationIndex].background;
     const current = assets.backgrounds[index];
-    if (!current) {
-      preloadBackground(index);
-      return 0;
-    }
-    const sway = this.fx.reduced ? 0 : Math.sin(this.fx.t * 0.18) * 7;
+    if (!current) { preloadBackground(index); return 0; }
     const k = this.transition ? this.transition.k : 0;
     const next = this.transition ? assets.backgrounds[LOCATIONS[this.transition.to].background] : null;
-    let waterOffset = 0;
-    for (const band of BANDS) {
-      const travel = STAGE_W - band.feather;
-      const ox = -k * travel + sway * band.drift;
-      if (band.drift === 0) waterOffset = ox;
+    if (this.water.ok) {
+      this.syncWaterCanvas();
+      const drawn = this.water.render({
+        from: current, to: next, mix: k, time: this.fx.t, waterline: this.waterline,
+        plants: this.fx.plantsFor(index), amplitude: this.fx.reduced ? 0.35 : 1,
+      });
+      if (drawn) {
+        this.water.show(true);
+        return -Math.sin(k * Math.PI) * 18;
+      }
+    }
+    this.water.show(false);
+    this.drawPaintingPlain(ctx, current, next, k);
+    return 0;
+  }
+
+  // Fallback for browsers without WebGL: the painting drawn plainly; during a row the two
+  // paintings slide with depth parallax and a feathered seam.
+  drawPaintingPlain(ctx, current, next, k) {
+    if (next) this.drawParallaxPlain(ctx, current, next, k);
+    else ctx.drawImage(current, 0, 0, STAGE_W, STAGE_H);
+  }
+
+  featheredCopy(img) {
+    if (this.featheredSource === img) return this.feathered;
+    const c = document.createElement('canvas');
+    c.width = STAGE_W;
+    c.height = STAGE_H;
+    const cx = c.getContext('2d');
+    cx.drawImage(img, 0, 0, STAGE_W, STAGE_H);
+    // the mask is built on its own canvas and applied once: a second destination-in fill
+    // would erase everything outside its own rectangle
+    const mask = document.createElement('canvas');
+    mask.width = STAGE_W;
+    mask.height = STAGE_H;
+    const m = mask.getContext('2d');
+    const g = m.createLinearGradient(0, 0, 256, 0);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(1, 'rgba(0,0,0,1)');
+    m.fillStyle = g;
+    m.fillRect(0, 0, 256, STAGE_H);
+    m.fillStyle = '#000';
+    m.fillRect(256, 0, STAGE_W - 256, STAGE_H);
+    cx.globalCompositeOperation = 'destination-in';
+    cx.drawImage(mask, 0, 0);
+    this.feathered = c;
+    this.featheredSource = img;
+    return c;
+  }
+
+  drawParallaxPlain(ctx, current, next, k) {
+    const feathered = this.featheredCopy(next);
+    const bands = [[0, 336, 1000], [336, 640, 1250], [640, STAGE_H, 1400]];
+    for (const [top, bottom, dist] of bands) {
+      const h = Math.min(STAGE_H, bottom + 3) - top;
+      const ox = -k * dist;
+      const nx = (1 - k) * dist;
       ctx.save();
       ctx.beginPath();
-      // bands overlap by a couple of pixels so anti-aliased clip edges never leave a seam
-      ctx.rect(0, band.top, STAGE_W, band.bottom - band.top + 3);
+      ctx.rect(0, top, STAGE_W, h);
       ctx.clip();
-      if (this.transition) {
-        // the next scenery sits underneath, so there is never a gap past the current edge,
-        // and its feathered copy blends the seam once the overlap has started
-        this.drawBand(ctx, next, band, ox + travel);
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(0, band.top, ox + STAGE_W + BAND_PAD, band.bottom - band.top);
-        ctx.clip();
-        this.drawBand(ctx, current, band, ox);
-        ctx.restore();
-        ctx.globalAlpha = Math.min(1, k * 8);
-        this.drawBand(ctx, this.feathered, band, ox + travel);
-        if (k > 0.85) {
-          ctx.globalAlpha = (k - 0.85) / 0.15;
-          this.drawBand(ctx, next, band, ox + travel);
-        }
-        ctx.globalAlpha = 1;
-      } else {
-        this.drawBand(ctx, current, band, ox);
+      ctx.drawImage(next, 0, top, STAGE_W, h, nx, top, STAGE_W, h);
+      ctx.drawImage(current, 0, top, STAGE_W, h, ox, top, STAGE_W, h);
+      ctx.globalAlpha = Math.min(1, k * 8);
+      ctx.drawImage(feathered, 0, top, STAGE_W, h, nx, top, STAGE_W, h);
+      if (k > 0.85) {
+        ctx.globalAlpha = (k - 0.85) / 0.15;
+        ctx.drawImage(next, 0, top, STAGE_W, h, nx, top, STAGE_W, h);
       }
+      ctx.globalAlpha = 1;
       ctx.restore();
     }
-    return waterOffset;
   }
 
   draw() {
     const ctx = this.stage.begin();
     ctx.clearRect(0, 0, STAGE_W, STAGE_H);
     const offset = this.drawBackground(ctx);
-    this.fx.drawWater(ctx, offset);
+    this.fx.drawWater(ctx, offset, state.fish);
     for (const f of state.fish) f.draw(ctx);
     this.popo.drawLine(ctx);
     this.popo.draw(ctx);
-    this.fx.drawDepthVeil(ctx);
+    this.fx.drawDepthVeil(ctx, this.popo);
+    this.fx.drawSurface(ctx, this.popo.anchor.x);
     this.fx.drawFront(ctx);
     this.ui.syncHits(state.fish);
   }
