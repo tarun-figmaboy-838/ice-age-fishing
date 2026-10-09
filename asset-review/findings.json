@@ -1,0 +1,24 @@
+[
+ {
+  "sheet": "popo-casting",
+  "cell": "r1c2",
+  "issue": "content cut at left",
+  "box": [
+   836,
+   418,
+   1254,
+   836
+  ]
+ },
+ {
+  "sheet": "popo-poses",
+  "cell": "wet",
+  "issue": "1 stray fragment(s), largest 37 px at (1526, 445, 1563, 446)",
+  "box": [
+   1366,
+   445,
+   1763,
+   887
+  ]
+ }
+]

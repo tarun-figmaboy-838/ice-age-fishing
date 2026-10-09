@@ -25,7 +25,7 @@ const MISHAP_POSES = {
   blink: { box: [105, 440, 402, 887], pivot: [250, 810], hand: [333, 694], head: [290, 523], top: [243, 451], contact: [215, 881] },
   climb: { box: [464, 438, 930, 869], pivot: [765, 744], hand: [505, 594], head: [650, 521], top: [697, 449], contact: [800, 847] },
   shake: { box: [950, 439, 1335, 878], pivot: [1140, 780], hand: [1220, 704], head: [1165, 520], top: [1100, 454], contact: [1160, 854] },
-  wet: { box: [1366, 445, 1763, 887], pivot: [1555, 791], hand: [1670, 727], head: [1620, 541], top: [1580, 460], contact: [1510, 869] },
+  wet: { box: [1366, 450, 1763, 887], pivot: [1555, 791], hand: [1670, 727], head: [1620, 541], top: [1580, 460], contact: [1510, 869] },
 };
 
 function frameData(sheet, name) {
