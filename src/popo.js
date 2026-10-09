@@ -6,13 +6,19 @@ const TAU = Math.PI * 2;
 const POPO_SCALE = 1.0;
 
 // Frame picks per sheet (row, col). Each sheet's scale makes Popo the same size everywhere
-// (derived from the body area measured by tools/build-assets.py). The casting frame at
-// row 1 col 2 has its raft clipped by the cell edge and is not used.
+// (derived from the body area measured by tools/build-assets.py). The frames hold only the
+// character and rod/paddle; the raft is the shared prop below, so it never changes size.
 const SHEETS = {
   fishing: { scale: 0.93, frames: { idle: [0, 1], blink: [1, 1] } },
-  casting: { scale: 1.0, frames: { lift: [0, 1], up: [0, 2], back: [1, 0], swing: [1, 1], hold: [2, 0], reel: [2, 1], reel2: [2, 2] } },
+  casting: { scale: 1.0, frames: { lift: [0, 1], up: [0, 2], back: [1, 0], swing: [1, 1], follow: [1, 2], hold: [2, 0], reel: [2, 1], reel2: [2, 2] } },
   rowing: { scale: 0.895, frames: { reach: [0, 0], dip: [0, 1], deep: [0, 2], pull: [1, 1], lift: [1, 2], raise: [2, 1] } },
 };
+
+// The raft prop (cell 0 of popo-props) is registered like the idle frame it was cut from:
+// cell point (186, 383) sits on the anchor at scale 0.93. Frames register their own raft's
+// bottom-right corner onto the prop's, which is the steadiest reference in the artwork.
+const PROP = { scale: 0.93, mid: 186, bottom: 383, left: 5, right: 367, bucket: { x: 85, y: 288 } };
+const PROP_RIGHT_DX = (PROP.right - PROP.mid) * PROP.scale;
 
 // Manually inspected pose extents, torso registrations and attachment landmarks.
 // One atlas-wide scale preserves the generated character's proportions in every pose.
@@ -135,20 +141,25 @@ class Popo {
   placement(sheet, name) {
     const f = frameData(sheet, name);
     const s = SHEETS[sheet].scale * POPO_SCALE;
-    const raftMid = (f.raftLeft + f.raftRight) / 2;
     const [bx0, by0, bx1, by1] = f.box;
+    const rightX = this.anchor.x + PROP_RIGHT_DX;
     return {
       img: assets.sheets[sheet].img,
       sx: bx0, sy: by0, sw: bx1 - bx0, sh: by1 - by0,
-      dx: this.anchor.x + (bx0 - raftMid) * s,
+      dx: rightX + (bx0 - f.raftRight) * s,
       dy: this.anchor.y + (by0 - f.raftBottom) * s,
       dw: (bx1 - bx0) * s,
       dh: (by1 - by0) * s,
-      raftRightX: this.anchor.x + (f.raftRight - raftMid) * s,
-      raftLeftX: this.anchor.x + (f.raftLeft - raftMid) * s,
-      raftHeight: 80 * s,
-      tip: f.rodTip ? { x: this.anchor.x + (f.rodTip[0] - raftMid) * s, y: this.anchor.y + (f.rodTip[1] - f.raftBottom) * s } : null,
+      raftRightX: rightX,
+      raftLeftX: this.anchor.x + (PROP.left - PROP.mid) * PROP.scale,
+      raftHeight: 80 * PROP.scale,
+      tip: f.rodTip ? { x: rightX + (f.rodTip[0] - f.raftRight) * s, y: this.anchor.y + (f.rodTip[1] - f.raftBottom) * s } : null,
     };
+  }
+
+  drawRaftProp(ctx) {
+    const k = PROP.scale;
+    ctx.drawImage(assets.props, 0, 0, 418, 418, this.anchor.x - PROP.mid * k, this.anchor.y - PROP.bottom * k, 418 * k, 418 * k);
   }
 
   // Tilt pivots on the raft's right end at the waterline, so a lean looks like the raft dipping.
@@ -186,8 +197,7 @@ class Popo {
   }
 
   bucketPoint() {
-    const p = this.placement(this.pose.sheet, this.pose.frame);
-    return this.transformPoint(p.raftLeftX + 62 * SHEETS[this.pose.sheet].scale, this.anchor.y - 92 * SHEETS[this.pose.sheet].scale);
+    return this.transformPoint(this.anchor.x + (PROP.bucket.x - PROP.mid) * PROP.scale, this.anchor.y + (PROP.bucket.y - PROP.bottom) * PROP.scale);
   }
 
   raftRight() {
@@ -198,6 +208,7 @@ class Popo {
     if (this.mishap) { this.drawMishap(ctx); return; }
     ctx.save();
     this.applyTransform(ctx);
+    this.drawRaftProp(ctx);
     if (this.fade < 1 && this.prevPose) {
       this.drawPose(ctx, this.prevPose, 1 - this.fade);
       this.drawPose(ctx, this.pose, this.fade);

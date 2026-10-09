@@ -34,8 +34,12 @@ const SHAPES = {
     fact: 'Only one pair of sides is parallel.' },
   kite: { shape: 'kite', name: 'Kite', atlas: 8, sides: 4, categories: ['kite', 'quadrilateral'],
     fact: 'Two short sides at the top, two long sides at the bottom.' },
+  rhombus: { shape: 'rhombus', name: 'Rhombus', atlas: 16, sides: 4,
+    categories: ['rhombus', 'parallelogram', 'quadrilateral'],
+    fact: '4 equal sides, like a square pushed over.' },
   pentagon: { shape: 'pentagon', name: 'Pentagon', atlas: 9, sides: 5, categories: ['pentagon'] },
   hexagon: { shape: 'hexagon', name: 'Hexagon', atlas: 10, sides: 6, categories: ['hexagon'] },
+  heptagon: { shape: 'heptagon', name: 'Heptagon', atlas: 15, sides: 7, categories: ['heptagon'] },
   octagon: { shape: 'octagon', name: 'Octagon', atlas: 12, sides: 8, categories: ['octagon'] },
   'octagon-tilted': { shape: 'octagon', name: 'Octagon', atlas: 11, sides: 8, categories: ['octagon'],
     fact: 'Turned a little, it is still an octagon.' },
@@ -62,6 +66,7 @@ const LOCATIONS = [
       { target: 'parallelogram', others: ['trapezium', 'triangle'] },
       { target: 'trapezium', others: ['parallelogram', 'kite'] },
       { target: 'kite', others: ['rectangle', 'trapezium'] },
+      { target: 'rhombus', others: ['rectangle', 'trapezium'] },
     ],
   },
   {
@@ -69,6 +74,7 @@ const LOCATIONS = [
     challenges: [
       { target: 'pentagon', others: ['square', 'hexagon'] },
       { target: 'hexagon', others: ['pentagon', 'triangle'] },
+      { target: 'heptagon', others: ['hexagon', 'square'] },
       { target: 'octagon', others: ['hexagon', 'circle'] },
     ],
   },

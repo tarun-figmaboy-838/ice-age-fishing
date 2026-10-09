@@ -28,6 +28,7 @@ function shapeSymbol(key) {
     case 'parallelogram': body = `<polygon points="19,16 61,16 45,48 3,48" ${style}/>`; break;
     case 'trapezium': body = `<polygon points="19,16 45,16 60,48 4,48" ${style}/>`; break;
     case 'kite': body = `<polygon points="32,4 56,27 32,60 8,27" ${style}/>`; break;
+    case 'rhombus': body = `<polygon points="32,12 58,32 32,52 6,32" ${style}/>`; break;
     default: {
       const n = s.sides;
       const rotate = n % 2 === 1 ? -Math.PI / 2 : Math.PI / n - Math.PI / 2;

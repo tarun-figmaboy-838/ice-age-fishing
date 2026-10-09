@@ -17,7 +17,7 @@ async function castTo(game, fish, token) {
   popo.playFrames('casting', ['lift', 'up', 'back'], 110);
   await clock.wait(340, token);
   audio.play('whoosh');
-  popo.playFrames('casting', ['swing', 'hold'], 140);
+  popo.playFrames('casting', ['swing', 'follow', 'hold'], 120);
   const from = popo.hookPosition();
   popo.line.mode = 'flight';
   popo.line.hook = { ...from };

@@ -9,13 +9,14 @@ src/sprite-data.js.
 Requires Pillow (pip install Pillow).
 """
 import base64
+import importlib.util
 import json
+import math
 import os
 import sys
-import runpy
 from collections import deque
 
-from PIL import Image, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, 'asset')
@@ -34,6 +35,10 @@ SHEETS = {
 }
 FISH_ATLAS = 'Glossy Geometric Fish Sprite Sheet.png'
 GRID = 3
+# The painted raft differs in length from frame to frame, so every frame is stripped down to
+# the character (plus rod or paddle) and the game draws one shared raft prop underneath.
+# Thin wood structures (rod, paddle shaft) survive the strip; the raft, rope and bucket do not.
+STRIP_KERNEL = 13
 
 
 def is_grey(r, g, b):
@@ -43,6 +48,44 @@ def is_grey(r, g, b):
 
 def is_rod(r, g, b, a):
     return a > 160 and r > 140 and 45 < g < 160 and b < 100 and r - g > 45
+
+
+def is_raft_colour(r, g, b, a):
+    if a < 40:
+        return False
+    wood = r >= 90 and r - b > 50 and 25 < g < 175
+    rope = r > 200 and g > 140 and b < 90
+    dark = max(r, g, b) < 110 and r - b > 25 and r >= 45
+    return wood or rope or dark
+
+
+def strip_raft(im, frames):
+    """Clear the painted raft, rope loops and bucket from each cell, keeping the character."""
+    px = im.load()
+    for f in frames:
+        x0, y0, cell = f['cellX'], f['cellY'], f['cell']
+        mask = Image.new('L', (cell, cell), 0)
+        mp = mask.load()
+        for y in range(cell):
+            for x in range(cell):
+                if is_raft_colour(*px[x0 + x, y0 + y]):
+                    mp[x, y] = 255
+        thick = mask.filter(ImageFilter.MinFilter(STRIP_KERNEL)).filter(ImageFilter.MaxFilter(STRIP_KERNEL + 2)).load()
+        bottom = f['raftBottom'] - y0
+        right = f['raftRight'] - x0
+        zone = (0, bottom - 200, right + 6, bottom + 4)
+        cleared = Image.new('L', (cell, cell), 0)
+        cp = cleared.load()
+        for y in range(max(0, zone[1]), min(cell, zone[3])):
+            for x in range(zone[0], min(cell, zone[2])):
+                if thick[x, y] and mp[x, y]:
+                    cp[x, y] = 255
+        # rope strands and shading that touch the cleared raft go with it
+        grown = cleared.filter(ImageFilter.MaxFilter(7)).load()
+        for y in range(max(0, zone[1]), min(cell, zone[3])):
+            for x in range(zone[0], min(cell, zone[2])):
+                if cp[x, y] or (grown[x, y] and mp[x, y]):
+                    px[x0 + x, y0 + y] = (0, 0, 0, 0)
 
 
 def erase_line_and_hook(im, frames):
@@ -259,6 +302,165 @@ def fish_boxes(im):
     return boxes
 
 
+def build_props(idle_cell):
+    """The shared raft/bucket and rod props, cut from the idle frame by tools/build-popo-layers.py."""
+    spec = importlib.util.spec_from_file_location('layers', os.path.join(ROOT, 'tools', 'build-popo-layers.py'))
+    layers = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(layers)
+    layers.build(idle_cell).save(os.path.join(OUT, 'sprites', 'popo-props.webp'), lossless=True)
+    for version in ('', '-v2'):
+        Image.open(os.path.join(SRC, f'popo-mishap-poses{version}.png')).save(
+            os.path.join(OUT, 'sprites', f'popo-mishap-poses{version}.webp'), quality=95, method=6)
+
+
+def fish_parts(atlas, box):
+    """Split one fish into body mask, decoration (fins) and face (eye, mouth) layers."""
+    cell = atlas.crop(tuple(box))
+    px = cell.load()
+    w, h = cell.size
+    body = Image.new('L', (w, h), 0)
+    bp = body.load()
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if a > 200 and max(r, g, b) - min(r, g, b) > 140 and min(r, g, b) < 85:
+                bp[x, y] = 255
+    raw = body.load()
+    body = body.filter(ImageFilter.MaxFilter(5)).filter(ImageFilter.MinFilter(5))
+    # the hull is the body with its holes (eye, mouth) filled: flood the outside, invert
+    outside = body.copy()
+    ImageDraw.floodfill(outside, (0, 0), 128)
+    hull = outside.point(lambda v: 0 if v == 128 else 255)
+    # the face is the eye (white, black) and mouth (dark) well inside the body, never the outline
+    interior = hull.filter(ImageFilter.MinFilter(11)).load()
+    face = Image.new('L', (w, h), 0)
+    fp = face.load()
+    for y in range(h):
+        for x in range(w):
+            if interior[x, y] and not raw[x, y] and px[x, y][3] > 60:
+                r, g, b, a = px[x, y]
+                if (r > 215 and g > 215 and b > 215) or max(r, g, b) < 95:
+                    fp[x, y] = 255
+    face = face.filter(ImageFilter.MaxFilter(3))
+    # fins are the bright decoration outside the body; the darker outline ring is dropped
+    ring = hull.filter(ImageFilter.MaxFilter(3)).load()
+    fins = Image.new('L', (w, h), 0)
+    fnp = fins.load()
+    for y in range(h):
+        for x in range(w):
+            if px[x, y][3] > 20 and not ring[x, y] and max(px[x, y][:3]) >= 190:
+                fnp[x, y] = 255
+    return cell, body, fins, face
+
+
+def body_colour(cell, body, face):
+    """Mean body colour in a ring around the face, used to paint the face out."""
+    px = cell.load()
+    ring = face.filter(ImageFilter.MaxFilter(15)).load()
+    bp = body.load()
+    fp = face.load()
+    acc = [0, 0, 0]
+    n = 0
+    for y in range(cell.size[1]):
+        for x in range(cell.size[0]):
+            if ring[x, y] and bp[x, y] and not fp[x, y]:
+                r, g, b, a = px[x, y]
+                acc[0] += r
+                acc[1] += g
+                acc[2] += b
+                n += 1
+    return tuple(v // max(1, n) for v in acc)
+
+
+def glossy_polygon(size, points, light, mid, dark):
+    """A beveled, glossy polygon in the style of the supplied fish bodies."""
+    w, h = size
+    cx = sum(p[0] for p in points) / len(points)
+    cy = sum(p[1] for p in points) / len(points)
+    inset = lambda k, dx=0, dy=0: [(cx + (x - cx) * k + dx, cy + (y - cy) * k + dy) for x, y in points]
+    layer = Image.new('RGBA', size, (0, 0, 0, 0))
+    ImageDraw.Draw(layer).polygon(points, fill=dark + (255,))
+    top = Image.new('RGBA', size, (0, 0, 0, 0))
+    ImageDraw.Draw(top).polygon(inset(0.95, 0, -2), fill=light + (255,))
+    layer.alpha_composite(top)
+    grad = Image.new('RGBA', size, (0, 0, 0, 0))
+    gp = grad.load()
+    ys = [p[1] for p in points]
+    y0, y1 = min(ys), max(ys)
+    for y in range(h):
+        t = min(1, max(0, (y - y0) / max(1, y1 - y0)))
+        c = tuple(int(mid[i] * (1 - t) + dark[i] * t) for i in range(3))
+        for x in range(w):
+            gp[x, y] = c + (255,)
+    face = Image.new('L', size, 0)
+    ImageDraw.Draw(face).polygon(inset(0.9, 0, 2), fill=255)
+    layer.paste(grad, (0, 0), face)
+    gloss = Image.new('L', size, 0)
+    r = (y1 - y0) * 0.16
+    ImageDraw.Draw(gloss).ellipse([cx - r * 2.2, y0 + (y1 - y0) * 0.1, cx - r * 0.2, y0 + (y1 - y0) * 0.1 + r], fill=95)
+    gloss = gloss.filter(ImageFilter.GaussianBlur(5))
+    white = Image.new('RGBA', size, (255, 255, 255, 255))
+    layer.paste(white, (0, 0), Image.composite(gloss, Image.new('L', size, 0), face))
+    return layer
+
+
+def make_heptagon(atlas, source_box):
+    cell, body, fins, face = fish_parts(atlas, source_box)
+    w, h = cell.size
+    bb = body.getbbox()
+    cx, cy = (bb[0] + bb[2]) / 2, (bb[1] + bb[3]) / 2
+    radius = (bb[3] - bb[1]) / 2 * 1.06
+    pts = [(cx + radius * math.cos(-math.pi / 2 + i * 2 * math.pi / 7), cy + radius * math.sin(-math.pi / 2 + i * 2 * math.pi / 7)) for i in range(7)]
+    out = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    # fins sit behind the body; nudge them toward the centre so the new edge covers their roots
+    fin_layer = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    fin_layer.paste(cell, (0, 0), fins)
+    fp = fins.load()
+    for (dx, dy) in ((0, 0),):
+        out.alpha_composite(fin_layer, (dx, dy))
+    out.alpha_composite(glossy_polygon((w, h), pts, (96, 232, 214), (24, 205, 188), (6, 138, 128)))
+    out.paste(cell, (0, 0), face)
+    return out
+
+
+def make_rhombus(atlas, source_box, stretch=1.38):
+    cell, body, fins, face = fish_parts(atlas, source_box)
+    w, h = cell.size
+    # paint the face out, stretch the fish along its horizontal diagonal (sides stay equal),
+    # then put the unstretched face back so the eye stays round
+    blank = cell.copy()
+    blank.paste(Image.new('RGBA', (w, h), body_colour(cell, body, face) + (255,)), (0, 0), face.filter(ImageFilter.MaxFilter(3)))
+    wide = blank.resize((round(w * stretch), h), Image.LANCZOS)
+    fb = face.getbbox()
+    fcx = (fb[0] + fb[2]) / 2
+    out = wide.copy()
+    patch = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    patch.paste(cell, (0, 0), face)
+    out.alpha_composite(patch, (round(fcx * stretch - fcx), 0))
+    # recolour the body to violet so it does not read as the blue tilted square
+    px = out.load()
+    bw = body.filter(ImageFilter.MaxFilter(3)).resize(out.size, Image.NEAREST).load()
+    for y in range(out.size[1]):
+        for x in range(out.size[0]):
+            r, g, b, a = px[x, y]
+            if a > 0 and bw[x, y] and b > r + 30 and b >= g and not (r > 200 and g > 200 and b > 200):
+                px[x, y] = (min(255, int(b * 0.55 + r * 0.3)), int(g * 0.45), min(255, int(b * 0.98)), a)
+    return out
+
+
+def extend_fish_atlas(atlas):
+    """Append a heptagon (built from the second octagon) and a rhombus (from the tilted square)."""
+    boxes = fish_boxes(atlas)
+    heptagon = make_heptagon(atlas, boxes[11])
+    rhombus = make_rhombus(atlas, boxes[5])
+    row_h = max(heptagon.size[1], rhombus.size[1]) + 40
+    out = Image.new('RGBA', (atlas.size[0], atlas.size[1] + row_h), (0, 0, 0, 0))
+    out.alpha_composite(atlas, (0, 0))
+    out.alpha_composite(heptagon, (40, atlas.size[1] + 20))
+    out.alpha_composite(rhombus, (420, atlas.size[1] + 20))
+    return out
+
+
 def main():
     os.makedirs(os.path.join(OUT, 'backgrounds'), exist_ok=True)
     os.makedirs(os.path.join(OUT, 'sprites'), exist_ok=True)
@@ -275,13 +477,16 @@ def main():
         frames = measure_frames(im, with_rod=erase)
         if erase:
             erase_line_and_hook(im, frames)
+        if key == 'fishing':
+            build_props(im.crop((418, 0, 836, 418)))
+        strip_raft(im, frames)
         for f in frames:
             f['box'] = content_box(im, f)
         im.save(os.path.join(OUT, 'sprites', f'popo-{key}.webp'), 'WEBP', quality=90, method=6)
         data['sheets'][key] = dict(width=im.size[0], height=im.size[1], frames=frames)
-        print('sheet', key, 'frames measured')
+        print('sheet', key, 'frames measured and stripped')
 
-    fish = Image.open(os.path.join(SRC, FISH_ATLAS)).convert('RGBA')
+    fish = extend_fish_atlas(Image.open(os.path.join(SRC, FISH_ATLAS)).convert('RGBA'))
     fish.save(os.path.join(OUT, 'sprites', 'fish.webp'), 'WEBP', quality=90, method=6)
     data['fish'] = dict(width=fish.size[0], height=fish.size[1], boxes=fish_boxes(fish))
     print('fish atlas', len(data['fish']['boxes']), 'sprites')
@@ -301,7 +506,6 @@ def main():
         fh.write('PopoGame.SHEET_DATA = ' + json.dumps(data['sheets'], indent=1) + ';\n')
         fh.write('PopoGame.FISH_ATLAS = ' + json.dumps(data['fish']) + ';\n')
     print('wrote src/sprite-data.js')
-    runpy.run_path(os.path.join(ROOT, 'tools', 'build-popo-layers.py'), run_name='__main__')
 
 
 if __name__ == '__main__':
