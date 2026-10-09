@@ -115,7 +115,7 @@ async function correctCatch(game, fish) {
     await clock.wait(3800, token);
     ui.hideReward();
     await clock.wait(400, token);
-    game.nextChallenge();
+    game.afterCatch();
   } catch (e) {
     swallow(e);
   }

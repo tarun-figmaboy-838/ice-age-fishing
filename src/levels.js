@@ -43,46 +43,24 @@ const SHAPES = {
   octagon: { shape: 'octagon', name: 'Octagon', atlas: 12, sides: 8, categories: ['octagon'] },
   nonagon: { shape: 'nonagon', name: 'Nonagon', atlas: 13, sides: 9, categories: ['nonagon'] },
   decagon: { shape: 'decagon', name: 'Decagon', atlas: 14, sides: 10, categories: ['decagon'] },
+  // a shape family used as a challenge target; it has no fish of its own
+  quadrilateral: { shape: 'quadrilateral', name: 'Four-sided', sides: 4, categories: ['quadrilateral'] },
 };
 
-// Each challenge lists the target and the distractors explicitly so no distractor can ever
-// also belong to the target's family (see categories above): a square would count as a
-// correct answer for "rectangle", "rhombus" and "kite", so it is never a distractor there.
+// One challenge per level. A challenge names a target shape (or a shape family such as
+// 'quadrilateral') and the distractors, which can never belong to the target's family: a
+// square counts as a rectangle, a rhombus and a kite, so it is never a distractor for those.
+// With `all`, every fish matching the target has to be caught before the level ends.
 const LOCATIONS = [
-  {
-    name: 'Triangle Bay', background: 0, waterline: 388,
-    challenges: [
-      { target: 'triangle', others: ['circle', 'square'], tutorial: true },
-      { target: 'triangle', others: ['pentagon', 'oval'] },
-      { target: 'triangle', others: ['rectangle', 'hexagon'] },
-    ],
-  },
-  {
-    name: 'Pentagon Cove', background: 1, waterline: 390,
-    challenges: [
-      { target: 'pentagon', others: ['triangle', 'square'] },
-      { target: 'pentagon', others: ['hexagon', 'circle'] },
-      { target: 'pentagon', others: ['octagon', 'rectangle'] },
-    ],
-  },
-  {
-    name: 'Hexagon Pass', background: 2, waterline: 387,
-    challenges: [
-      { target: 'hexagon', others: ['triangle', 'circle'] },
-      { target: 'hexagon', others: ['pentagon', 'square'] },
-      { target: 'hexagon', others: ['octagon', 'oval'] },
-    ],
-  },
-  {
-    name: 'Quadrilateral Waters', background: 3, waterline: 388,
-    challenges: [
-      { target: 'square', others: ['rectangle', 'kite'] },
-      { target: 'rectangle', others: ['kite', 'parallelogram'] },
-      { target: 'parallelogram', others: ['kite', 'hexagon'] },
-      { target: 'rhombus', others: ['rectangle', 'kite'] },
-      { target: 'kite', others: ['rectangle', 'parallelogram'] },
-    ],
-  },
+  { name: 'Triangle Bay', background: 0, waterline: 388,
+    challenges: [{ target: 'triangle', others: ['circle', 'square'], tutorial: true }] },
+  { name: 'Pentagon Cove', background: 1, waterline: 390,
+    challenges: [{ target: 'pentagon', others: ['triangle', 'hexagon'] }] },
+  { name: 'Hexagon Pass', background: 2, waterline: 387,
+    challenges: [{ target: 'hexagon', others: ['pentagon', 'octagon'] }] },
+  { name: 'Quadrilateral Waters', background: 3, waterline: 388,
+    challenges: [{ target: 'quadrilateral', all: true, fishScale: 0.82,
+      fish: ['square', 'rectangle', 'parallelogram', 'rhombus', 'kite', 'triangle', 'circle'] }] },
 ];
 
 function getShape(key) {
@@ -91,6 +69,10 @@ function getShape(key) {
 
 function matchesTarget(fishKey, targetKey) {
   return SHAPES[fishKey].categories.includes(SHAPES[targetKey].shape);
+}
+
+function challengeFish(challenge) {
+  return challenge.fish || [challenge.target, ...challenge.others];
 }
 
 function learningLines(shape) {
@@ -102,5 +84,5 @@ function sideFact(shape) {
   return shape.fact || `${shape.sides} straight sides and ${shape.sides} corners.`;
 }
 
-Object.assign(PopoGame, { TERMS, SHAPES, LOCATIONS, getShape, matchesTarget, learningLines, sideFact });
+Object.assign(PopoGame, { TERMS, SHAPES, LOCATIONS, getShape, matchesTarget, challengeFish, learningLines, sideFact });
 })(window.PopoGame = window.PopoGame || {});

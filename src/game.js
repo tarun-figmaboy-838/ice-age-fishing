@@ -1,6 +1,6 @@
 (function (PopoGame) {
 'use strict';
-const { assets, preloadBackground, clock, Effects, WaterScene, spawnFish, LOCATIONS, matchesTarget, getShape, Popo, correctCatch, wrongCatch, travelTo, tutorial, mouthOf, STAGE_W, STAGE_H, swimArea, raftAnchor, state, PHASE, resetProgress, newToken, isCurrent } = PopoGame;
+const { assets, preloadBackground, clock, Effects, WaterScene, spawnFish, LOCATIONS, matchesTarget, challengeFish, getShape, Popo, correctCatch, wrongCatch, travelTo, tutorial, mouthOf, STAGE_W, STAGE_H, swimArea, raftAnchor, state, PHASE, resetProgress, newToken, isCurrent } = PopoGame;
 
 const HINT_DELAY = 4;
 
@@ -119,11 +119,34 @@ class Game {
     const ch = this.currentChallenge();
     state.target = ch.target;
     state.selectedFish = null;
-    state.fish = spawnFish([ch.target, ...ch.others], this.area);
+    state.fish = spawnFish(challengeFish(ch), this.area, ch.fishScale || 1);
     state.idleTime = 0;
     state.hintShown = false;
+    this.ui.setInstruction(this.challengeText(), ch.target);
+  }
+
+  challengeText() {
+    const ch = this.currentChallenge();
     const name = getShape(ch.target).name.toLowerCase();
-    this.ui.setInstruction(`Catch the ${name} fish!`, ch.target);
+    return ch.all ? `Catch all the ${name} fish!` : `Catch the ${name} fish!`;
+  }
+
+  remainingTargets() {
+    return state.fish.filter((f) => !f.gone && matchesTarget(f.key, state.target));
+  }
+
+  // After a catch: a catch-all challenge carries on while matching fish remain.
+  afterCatch() {
+    if (this.currentChallenge().all && this.remainingTargets().length > 0) {
+      state.selectedFish = null;
+      state.idleTime = 0;
+      state.hintShown = false;
+      this.ui.setInstruction(this.challengeText(), state.target);
+      state.phase = PHASE.READY;
+      this.ui.setHitsEnabled(true);
+      return;
+    }
+    this.nextChallenge();
   }
 
   setupChallenge() {
@@ -188,7 +211,7 @@ class Game {
     state.idleTime = 0;
     this.clearHint();
     this.instructionRevert = 0;
-    this.ui.setInstruction(`Catch the ${getShape(state.target).name.toLowerCase()} fish!`, state.target);
+    this.ui.setInstruction(this.challengeText(), state.target);
     if (matchesTarget(fish.key, state.target)) {
       this.tutorialPending = false;
       if (this.handFish) { this.ui.hideHand(); this.handFish = null; }
@@ -206,7 +229,7 @@ class Game {
   // The tutorial hand stays until the first correct tap, so it comes back after a wrong one.
   restoreTutorialHand() {
     if (!this.tutorialPending || state.phase !== PHASE.READY) return;
-    this.showHandOn(state.fish.find((f) => matchesTarget(f.key, state.target)));
+    this.showHandOn(this.remainingTargets()[0]);
   }
 
   togglePause() {
@@ -246,8 +269,7 @@ class Game {
     if (this.instructionRevert <= 0) return;
     this.instructionRevert -= dt * 1000;
     if (this.instructionRevert <= 0 && state.phase === PHASE.READY) {
-      const name = getShape(state.target).name.toLowerCase();
-      this.ui.setInstruction(`Catch the ${name} fish!`, state.target);
+      this.ui.setInstruction(this.challengeText(), state.target);
     }
   }
 
@@ -261,7 +283,7 @@ class Game {
     state.idleTime += dt;
     if (state.idleTime > HINT_DELAY && !state.hintShown) {
       state.hintShown = true;
-      const target = state.fish.find((f) => matchesTarget(f.key, state.target));
+      const target = this.remainingTargets()[0];
       if (target) target.hinted = true;
       this.ui.pulseTarget();
       this.audio.play('hint');

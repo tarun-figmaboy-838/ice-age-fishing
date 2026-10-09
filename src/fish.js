@@ -6,12 +6,12 @@ const TAU = Math.PI * 2;
 const FISH_SCALE = 0.56;
 
 class Fish {
-  constructor(key, x, y, dir) {
+  constructor(key, x, y, dir, sizeScale = 1) {
     this.key = key;
     this.shape = getShape(key);
     this.box = assets.fish.boxes[this.shape.atlas];
-    this.w = (this.box[2] - this.box[0]) * FISH_SCALE;
-    this.h = (this.box[3] - this.box[1]) * FISH_SCALE;
+    this.w = (this.box[2] - this.box[0]) * FISH_SCALE * sizeScale;
+    this.h = (this.box[3] - this.box[1]) * FISH_SCALE * sizeScale;
     this.x = x;
     this.y = y;
     this.baseY = y;
@@ -200,7 +200,7 @@ class Fish {
 }
 
 // Spread the fish across the swim area so none start on top of each other.
-function spawnFish(keys, area) {
+function spawnFish(keys, area, sizeScale = 1) {
   const lanes = keys.length;
   const span = area.right - area.left;
   const order = keys.map((k, i) => i).sort(() => Math.random() - 0.5);
@@ -209,8 +209,7 @@ function spawnFish(keys, area) {
     const slot = order[i];
     const x = area.left + span * ((slot + 0.5) / lanes) + (Math.random() - 0.5) * span * 0.12;
     const y = area.top + depth * (0.2 + 0.6 * ((slot * 2 + 1) % lanes) / Math.max(1, lanes - 1)) + (Math.random() - 0.5) * 40;
-    const fish = new Fish(key, x, Math.min(area.bottom - 60, Math.max(area.top + 60, y)), Math.random() < 0.5 ? 1 : -1);
-    return fish;
+    return new Fish(key, x, Math.min(area.bottom - 60, Math.max(area.top + 60, y)), Math.random() < 0.5 ? 1 : -1, sizeScale);
   });
 }
 
