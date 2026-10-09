@@ -61,7 +61,7 @@ class UI {
       reward: $('overlay-reward'), rewardFish: $('reward-fish'), rewardImg: $('reward-fish-img'), rewardName: $('reward-name'), rewardFact: $('reward-fact'),
       pauseOverlay: $('overlay-pause'), resume: $('btn-resume'), restart: $('btn-restart'),
       summary: $('overlay-summary'), summaryList: $('summary-list'), playAgain: $('btn-play-again'),
-      rotate: $('rotate-hint'), scene: $('scene'),
+      rotate: $('rotate-hint'), scene: $('scene'), speech: $('speech'), caption: $('caption'),
     };
     this.handlers = {};
     this.hitButtons = new Map();
@@ -88,6 +88,38 @@ class UI {
 
   emit(name, ...args) {
     if (this.handlers[name]) this.handlers[name](...args);
+  }
+
+  // A story line: Popo's speech bubble (anchored at a stage point) or the narrator's caption.
+  showLine(who, text) {
+    this.hideLines();
+    const el = who === 'narrator' ? this.el.caption : this.el.speech;
+    el.querySelector('.typed').textContent = '';
+    el.querySelector('.rest').textContent = text;
+    el.hidden = false;
+    el.classList.remove('pop');
+    void el.offsetWidth;
+    el.classList.add('pop');
+    this.el.hud.classList.add('talking');
+    this.lineEl = el;
+  }
+
+  typeLine(text, count) {
+    if (!this.lineEl) return;
+    this.lineEl.querySelector('.typed').textContent = text.slice(0, count);
+    this.lineEl.querySelector('.rest').textContent = text.slice(count);
+  }
+
+  placeSpeech(x, y) {
+    this.el.speech.style.left = `${(x * this.scale).toFixed(1)}px`;
+    this.el.speech.style.top = `${(y * this.scale).toFixed(1)}px`;
+  }
+
+  hideLines() {
+    this.el.speech.hidden = true;
+    this.el.caption.hidden = true;
+    this.el.hud.classList.remove('talking');
+    this.lineEl = null;
   }
 
   setScale(scale) {
@@ -122,6 +154,7 @@ class UI {
 
 
   setInstruction(text, shapeKey = null) {
+    this.el.instruction.classList.toggle('empty', !text);
     this.el.instructionText.textContent = text;
     this.el.instructionIcon.innerHTML = shapeKey ? shapeSymbol(shapeKey) : '';
     this.el.instructionIcon.hidden = !shapeKey;

@@ -1,6 +1,6 @@
 (function (PopoGame) {
 'use strict';
-const { assets, preloadBackground, clock, Effects, WaterScene, surfaceWave, PAN_OVERLAP, spawnFish, LOCATIONS, matchesTarget, challengeFish, getShape, Popo, correctCatch, wrongCatch, travelTo, tutorial, mouthOf, STAGE_W, STAGE_H, swimArea, raftAnchor, state, PHASE, resetProgress, newToken, isCurrent } = PopoGame;
+const { assets, preloadBackground, clock, Effects, WaterScene, surfaceWave, PAN_OVERLAP, spawnFish, LOCATIONS, matchesTarget, challengeFish, getShape, Popo, correctCatch, wrongCatch, travelTo, tutorial, opening, discovery, mouthOf, Cancelled, STAGE_W, STAGE_H, swimArea, raftAnchor, state, PHASE, resetProgress, newToken, isCurrent } = PopoGame;
 
 const HINT_DELAY = 4;
 
@@ -30,6 +30,11 @@ class Game {
     this.titleFade = 0;
     this.titleSplashIn = 0.8;
     this.raftRippleIn = 1;
+    this.dialogue = null;
+    this.leaper = null;
+    this.waterQuality = 1;
+    this.frameAvg = 1 / 60;
+    this.slowFor = 0;
     this.surfaceColors = [];
     this.tutorialPending = false;
     this.waterline = LOCATIONS[0].waterline;
@@ -65,10 +70,9 @@ class Game {
     this.ui.hideStart();
     this.ui.showHud();
     this.applyLocation();
-    this.spawnChallengeFish();
     this.ui.setHitsEnabled(false);
     this.tutorialPending = true;
-    tutorial(this);
+    opening(this);
     this.showIdleScene();
   }
 
@@ -91,10 +95,11 @@ class Game {
     state.paused = false;
     this.audio.resume();
     this.popo = new Popo();
+    this.endLine();
+    this.leaper = null;
     this.applyLocation();
-    this.spawnChallengeFish();
     this.tutorialPending = true;
-    tutorial(this);
+    opening(this);
   }
 
   dispose() {
@@ -193,7 +198,9 @@ class Game {
     if (state.challengeIndex < loc.challenges.length) {
       this.setupChallenge();
     } else if (state.locationIndex + 1 < LOCATIONS.length) {
-      travelTo(this, state.locationIndex + 1);
+      const next = state.locationIndex + 1;
+      if (LOCATIONS[next].discovery) discovery(this, next);
+      else travelTo(this, next);
     } else {
       this.complete();
     }
@@ -331,9 +338,21 @@ class Game {
     this.syncWaterCanvas();
   }
 
+  // The painting is STAGE_W pixels wide, so the water pass never renders more pixels than
+  // that; on big or Retina screens the browser scales it up. waterQuality drops on slow devices.
   syncWaterCanvas() {
     const c = this.stage.canvas;
-    this.water.resize(c.width, c.height, c.style.width, c.style.height);
+    const k = Math.min(1, STAGE_W / c.width) * this.waterQuality;
+    this.water.resize(Math.round(c.width * k), Math.round(c.height * k), c.style.width, c.style.height);
+  }
+
+  watchFrameRate(dt) {
+    this.frameAvg = this.frameAvg * 0.97 + dt * 0.03;
+    this.slowFor = this.frameAvg > 0.026 ? this.slowFor + dt : 0;
+    if (this.slowFor > 2 && this.waterQuality > 0.6) {
+      this.waterQuality = 0.6;
+      this.slowFor = 0;
+    }
   }
 
   // Shows feedback for a while, then brings the challenge instruction back.
@@ -392,6 +411,64 @@ class Game {
     if (!state.paused) this.update(dt);
     this.draw();
     requestAnimationFrame((t) => this.loop(t));
+  }
+
+  // Shows one story line, typing it out with little voice blips. Resolves once it has been
+  // on screen long enough to read, or straight away when the player taps to move on.
+  say(text, who, token) {
+    return new Promise((resolve, reject) => {
+      if (this.dialogue) this.endLine();
+      this.dialogue = {
+        text, who, token, resolve, reject, shown: 0, held: 0,
+        hold: 650 + text.length * 32, speed: who === 'narrator' ? 30 : 36,
+      };
+      this.ui.showLine(who, text);
+      this.placeSpeech();
+      if (who === 'narrator') this.audio.play('narrate');
+    });
+  }
+
+  placeSpeech() {
+    const p = this.popo;
+    this.ui.placeSpeech(p.anchor.x + 78 + p.travelShift, p.anchor.y - 238 + p.bob);
+  }
+
+  endLine() {
+    this.dialogue = null;
+    this.ui.hideLines();
+  }
+
+  skipDialogue() {
+    const d = this.dialogue;
+    if (!d) return false;
+    if (d.shown < d.text.length) d.shown = d.text.length;
+    else d.held = d.hold;
+    return true;
+  }
+
+  updateDialogue(dt) {
+    const d = this.dialogue;
+    if (!d) return;
+    if (!isCurrent(d.token)) {
+      this.endLine();
+      d.reject(new Cancelled());
+      return;
+    }
+    if (d.shown < d.text.length) {
+      const before = Math.floor(d.shown);
+      d.shown = Math.min(d.text.length, d.shown + dt * d.speed);
+      const now = Math.floor(d.shown);
+      if (d.who === 'popo' && Math.floor(now / 3) > Math.floor(before / 3) && /\w/.test(d.text[now - 1] || '')) this.audio.play('talk');
+      this.ui.typeLine(d.text, now);
+    } else {
+      d.held += dt * 1000;
+      if (d.held >= d.hold) {
+        this.endLine();
+        d.resolve();
+        return;
+      }
+    }
+    if (d.who === 'popo') this.placeSpeech();
   }
 
   // The raft sits on the animated surface: it rises, falls and tilts with the waves under its
@@ -530,6 +607,8 @@ class Game {
     this.fx.update(dt);
     this.popo.waterResponse = this.fx.raftResponse(this.popo.anchor.x);
     this.rideWaves(dt);
+    this.updateDialogue(dt);
+    this.watchFrameRate(dt);
     for (const f of state.fish) {
       f.update(dt, this.area, state.fish);
       if (f.gone) continue;
@@ -685,6 +764,7 @@ class Game {
     const offset = this.drawBackground(ctx);
     this.fx.drawWater(ctx, offset, state.fish);
     for (const f of state.fish) f.draw(ctx);
+    if (this.leaper) this.leaper.draw(ctx);
     this.popo.drawLine(ctx);
     this.popo.draw(ctx);
     this.drawRaftWater(ctx);

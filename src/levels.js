@@ -57,6 +57,8 @@ const LOCATIONS = [
   { name: 'Hexagon Pass', background: 2, waterline: 387,
     challenges: [{ target: 'hexagon', others: ['pentagon', 'octagon'] }] },
   { name: 'Quadrilateral Waters', background: 3, waterline: 388,
+    // before rowing here, a fish Popo has never seen leaps out of the water
+    discovery: { fish: 'rhombus', lines: ["Woah! I haven't seen that one before!", 'What kind of fish was that?', "Let's find out!"] },
     challenges: [{ target: 'quadrilateral', all: true, fishScale: 0.9,
       fish: ['square', 'rectangle', 'parallelogram', 'rhombus', 'triangle-right', 'oval'] }] },
 ];
@@ -83,5 +85,11 @@ function sideFact(shape) {
   return shape.fact || `${shape.sides} straight sides and ${shape.sides} corners.`;
 }
 
-Object.assign(PopoGame, { TERMS, SHAPES, LOCATIONS, getShape, matchesTarget, challengeFish, learningLines, sideFact });
+// Story lines: the narrator opens the journey, Popo cheers every catch.
+const STORY = {
+  intro: [{ who: 'narrator', text: 'Popo loves fishing. And today, he wants to catch all kinds of fish!' }],
+  catch: 'Great catch!',
+};
+
+Object.assign(PopoGame, { TERMS, SHAPES, LOCATIONS, STORY, getShape, matchesTarget, challengeFish, learningLines, sideFact });
 })(window.PopoGame = window.PopoGame || {});

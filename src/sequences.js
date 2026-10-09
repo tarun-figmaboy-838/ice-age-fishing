@@ -1,6 +1,6 @@
 (function (PopoGame) {
 'use strict';
-const { clock, ease, Cancelled, state, PHASE, newToken, isCurrent, getShape } = PopoGame;
+const { clock, ease, Cancelled, state, PHASE, newToken, isCurrent, getShape, Fish, STORY, LOCATIONS, STAGE_W } = PopoGame;
 
 // Where the hook grabs a fish: just in front of its mouth.
 function mouthOf(fish) {
@@ -108,7 +108,8 @@ async function correctCatch(game, fish) {
     popo.idle();
     game.collect(fish);
     game.cheer();
-    await clock.wait(420, token);
+    audio.play('cheer');
+    await game.say(STORY.catch, 'popo', token);
 
     state.phase = PHASE.CELEBRATING;
     audio.duck(2200);
@@ -334,7 +335,7 @@ async function travelTo(game, nextIndex) {
   try {
     state.phase = PHASE.LEVEL_TRANSITION;
     ui.setHitsEnabled(false);
-    ui.setInstruction('Great catch! Popo rows on…', null);
+    ui.setInstruction('Popo rows on…', null);
     audio.play('complete');
     for (const f of state.fish) { f.frozen = false; f.escape(); }
     await clock.wait(900, token);
@@ -407,5 +408,98 @@ async function tutorial(game) {
   }
 }
 
-Object.assign(PopoGame, { mouthOf, correctCatch, wrongCatch, travelTo, tutorial });
+// The journey opens with the narrator; then the first fish swim in and the tutorial starts.
+async function opening(game) {
+  const token = newToken();
+  try {
+    state.phase = PHASE.TUTORIAL;
+    game.ui.setHitsEnabled(false);
+    state.fish = [];
+    game.ui.setInstruction('', null);
+    await clock.wait(800, token);
+    for (const line of STORY.intro) await game.say(line.text, line.who, token);
+    game.spawnChallengeFish();
+    for (const f of state.fish) f.alpha = 0;
+    await clock.tween(500, token, (t) => { for (const f of state.fish) f.alpha = t; });
+    tutorial(game);
+  } catch (e) {
+    swallow(e);
+  }
+}
+
+// A fish Popo has never seen races in, leaps out of the water and dives away; Popo wonders
+// about it, then rows off to find out.
+async function discovery(game, nextIndex) {
+  const token = newToken();
+  const { popo, fx, audio, ui } = game;
+  const story = LOCATIONS[nextIndex].discovery;
+  try {
+    state.phase = PHASE.LEVEL_TRANSITION;
+    ui.setHitsEnabled(false);
+    ui.setInstruction('', null);
+    for (const f of state.fish) { f.frozen = false; f.escape(); }
+    await clock.wait(700, token);
+    state.fish = [];
+    ui.clearHits();
+
+    const wl = game.waterline;
+    const fish = new Fish(story.fish, STAGE_W + 120, wl + 170, -1, 1.15);
+    game.leaper = fish;
+    audio.play('whoosh');
+    await clock.tween(950, token, (t) => {
+      const k = ease.out(t);
+      fish.x = STAGE_W + 120 + (1180 - STAGE_W - 120) * k;
+      fish.y = wl + 170 - 90 * k + Math.sin(t * Math.PI * 2) * 8;
+      fish.pitch = -0.12 * k;
+      if (Math.random() < 0.35) fx.puff(fish.x + fish.dir * fish.w * 0.42, fish.y, fish.dir, 1);
+    });
+
+    // the leap: out of the water in an arc over toward the raft, then back in
+    const x0 = 1180;
+    const x1 = 760;
+    const y0 = wl + 80;
+    const height = 290;
+    let out = false;
+    let back = false;
+    audio.play('leap');
+    const arc = clock.tween(1500, token, (t) => {
+      fish.x = x0 + (x1 - x0) * t;
+      fish.y = y0 - height * 4 * t * (1 - t);
+      const vy = -height * 4 * (1 - 2 * t);
+      fish.pitch = Math.max(-0.9, Math.min(0.9, Math.atan2(vy, Math.abs(x1 - x0)) * 0.9));
+      if (!out && fish.y < wl) {
+        out = true;
+        fx.splash(fish.x, wl, true);
+        audio.play('splashSmall');
+      }
+      if (out && !back && t > 0.5 && fish.y > wl) {
+        back = true;
+        fx.splash(fish.x, wl, true);
+        audio.play('splashBig');
+      }
+    });
+    await clock.wait(420, token);
+    popo.beginMishap(wl);
+    audio.play('woah');
+    const woah = game.say(story.lines[0], 'popo', token);
+    await arc;
+    await clock.tween(900, token, (t) => {
+      const k = ease.in(t);
+      fish.x = x1 - 900 * k;
+      fish.y = y0 + 60 * k;
+      fish.pitch = 0.25 * (1 - k);
+      if (Math.random() < 0.3) fx.puff(fish.x + fish.dir * fish.w * 0.42, fish.y, fish.dir, 1);
+    });
+    game.leaper = null;
+    await woah;
+    popo.endMishap();
+    for (const line of story.lines.slice(1)) await game.say(line, 'popo', token);
+    travelTo(game, nextIndex);
+  } catch (e) {
+    game.leaper = null;
+    swallow(e);
+  }
+}
+
+Object.assign(PopoGame, { mouthOf, correctCatch, wrongCatch, travelTo, tutorial, opening, discovery });
 })(window.PopoGame = window.PopoGame || {});

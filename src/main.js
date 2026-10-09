@@ -11,6 +11,7 @@ ui.on('play', () => game.start());
 ui.on('fishTap', (fish, point) => game.onFishTap(fish, point));
 document.getElementById('stage').addEventListener('pointerdown', (e) => {
   if (e.target.closest('button, .hud, .overlay')) return;
+  if (game.skipDialogue()) return;
   game.onWaterTap(stage.toStage(e.clientX, e.clientY));
 });
 ui.on('pause', () => { audio.play('ui'); game.togglePause(); });
