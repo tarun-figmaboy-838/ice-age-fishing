@@ -3,6 +3,7 @@
 const { SHEET_DATA, FISH_ATLAS } = PopoGame;
 
 const TITLE = PopoGame.TITLE_DATA || 'assets/backgrounds/title.webp';
+const PLAY = PopoGame.PLAY_DATA || 'assets/sprites/play.webp';
 const BACKGROUNDS = PopoGame.BACKGROUND_DATA || [1, 2, 3, 4].map((n) => `assets/backgrounds/location-${n}.webp`);
 
 const assets = {
@@ -33,7 +34,7 @@ function preloadBackground(index) {
 }
 
 async function loadCoreAssets() {
-  const [fishing, casting, rowing, fish, bg0, props, mishapPoses, title] = await Promise.all([
+  const [fishing, casting, rowing, fish, bg0, props, mishapPoses, title, play] = await Promise.all([
     loadImage('assets/sprites/popo-fishing.webp'),
     loadImage('assets/sprites/popo-casting.webp'),
     loadImage('assets/sprites/popo-rowing.webp'),
@@ -42,8 +43,10 @@ async function loadCoreAssets() {
     loadImage('assets/sprites/popo-props.webp'),
     loadImage('assets/sprites/popo-mishap-poses-v2.webp'),
     loadImage(TITLE),
+    loadImage(PLAY),
   ]);
   assets.title = title;
+  assets.play = play;
   assets.props = props;
   assets.mishapPoses = mishapPoses;
   assets.sheets = {

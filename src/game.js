@@ -10,7 +10,10 @@ const TITLE = {
   waterline: 610,
   seabed: 860,
   area: { left: 60, right: 1612, top: 680, bottom: 905 },
-  fish: ['triangle', 'pentagon', 'hexagon', 'square', 'rhombus', 'circle'],
+  fish: ['triangle', 'square', 'pentagon', 'hexagon', 'circle'],
+  // the play button floats in the middle of the banner's water; fish circle it
+  play: { x: 836, y: 772, r: 112 },
+  orbit: { rx: 270, ry: 92, speed: 0.55 },
   splash: { left: 790, right: 980, y: 588 },
   twinkles: [[884, 118], [1092, 86], [1360, 62], [1598, 142], [1588, 300], [962, 334]],
 };
@@ -27,6 +30,7 @@ class Game {
     this.titleFx = new Effects();
     this.titleFx.setWaterline(TITLE.waterline);
     this.titleFish = [];
+    this.playAnim = { hover: 0, hoverTarget: 0, press: 0, burst: 0, angle: 0, bubbleIn: 0.3 };
     this.titleFade = 0;
     this.titleSplashIn = 0.8;
     this.raftRippleIn = 1;
@@ -52,7 +56,8 @@ class Game {
   showIdleScene() {
     this.applyLocation();
     if (state.phase === PHASE.INTRO && !this.titleFish.length) {
-      this.titleFish = spawnFish(TITLE.fish, TITLE.area, 0.85);
+      this.titleFish = spawnFish(TITLE.fish, TITLE.area, 0.62);
+      this.titleFish.forEach((f, i) => { f.orbit = (i / TITLE.fish.length) * Math.PI * 2; });
     }
     if (!this.running) {
       this.running = true;
@@ -282,8 +287,38 @@ class Game {
     }
     this.titleFx.puff(point.x, point.y, 0, 5, true);
     for (const f of this.titleFish) {
-      if (Math.hypot(f.x - point.x, f.y - point.y) < 320) f.lookAt(point);
+      if (Math.hypot(f.x - point.x, f.y - point.y) < 320) { f.wiggle(); f.puffs += 2; }
     }
+  }
+
+  onPlayHover(on) {
+    if (state.phase !== PHASE.INTRO) return;
+    this.playAnim.hoverTarget = on ? 1 : 0;
+    if (on) this.audio.play('bloop');
+  }
+
+  onPlayPress() {
+    if (state.phase !== PHASE.INTRO) return;
+    this.playAnim.press = 1;
+  }
+
+  // Play: the button pops, bubbles and sparkles burst out, the fish scatter, the game begins.
+  pressPlay() {
+    if (state.phase !== PHASE.INTRO || !assets.title) return;
+    const { x, y, r } = TITLE.play;
+    this.audio.init();
+    this.audio.resume();
+    this.playAnim.burst = 0.001;
+    this.playAnim.press = 1;
+    for (let i = 0; i < 10; i += 1) {
+      const a = (i / 10) * Math.PI * 2;
+      this.titleFx.puff(x + Math.cos(a) * r, y + Math.sin(a) * r * 0.8, Math.cos(a), 2, true);
+    }
+    this.titleFx.sparkle(x, y - r * 0.4, 14);
+    for (const f of this.titleFish) f.wiggle();
+    this.audio.play('splashSmall');
+    this.audio.play('cheer');
+    this.start();
   }
 
   onFishTap(tapped, point) {
@@ -580,14 +615,38 @@ class Game {
   // Fish, bubbles and splashes for the title banner. Also runs while it fades out after Play.
   updateTitle(dt) {
     this.titleFx.update(dt);
+    const pa = this.playAnim;
+    const { x: px, y: py } = TITLE.play;
+    const { rx, ry, speed } = TITLE.orbit;
+    pa.hover += (pa.hoverTarget - pa.hover) * Math.min(1, dt * 10);
+    pa.press = Math.max(0, pa.press - dt * 4);
+    if (pa.burst > 0) pa.burst += dt;
+    pa.angle += dt * speed * (1 + pa.burst * 4);
+    pa.bubbleIn -= dt;
+    if (pa.bubbleIn <= 0) {
+      pa.bubbleIn = 0.28 + Math.random() * 0.3;
+      this.titleFx.puff(px + (Math.random() - 0.5) * 150, py + 70, 0, 1);
+    }
     for (const f of this.titleFish) {
-      f.update(dt, TITLE.area, this.titleFish);
+      // a 3D orbit: the far side runs behind the button, smaller and dimmer, and each fish
+      // turns edge-on at the sides instead of flipping
+      const a = pa.angle + f.orbit;
+      const spread = 1 + pa.burst * 2.4;
+      f.x = px + Math.cos(a) * rx * spread;
+      f.y = py + Math.sin(a) * ry * spread + Math.sin(a * 2 + f.orbit) * 8;
+      const facing = -Math.sin(a);
+      f.dir = Math.sign(facing || 1) * Math.max(0.12, Math.abs(facing));
+      f.scale = 0.82 + 0.26 * (Math.sin(a) + 1) / 2;
+      f.depth = Math.sin(a);
+      f.bobPhase += dt * 2.2;
+      f.breath -= dt;
+      if (f.wiggleT >= 0) { f.wiggleT += dt; if (f.wiggleT > 0.45) f.wiggleT = -1; }
       if (f.breath <= 0) {
         f.breath = 1.4 + Math.random() * 2.4;
         f.puffs += 1 + Math.floor(Math.random() * 3);
       }
       if (f.puffs > 0) {
-        this.titleFx.puff(f.x + f.dir * f.w * 0.42, f.y + f.h * 0.1, f.dir, f.puffs);
+        this.titleFx.puff(f.x + Math.sign(f.dir) * f.w * 0.42 * f.scale, f.y + f.h * 0.1, Math.sign(f.dir), f.puffs);
         f.puffs = 0;
       }
     }
@@ -702,6 +761,54 @@ class Game {
     ctx.globalAlpha = 1;
   }
 
+  // The play button floats in the water: a gentle bob and sway, a breathing warm glow behind
+  // it, an occasional shine across its face, a grow on hover and a squash when pressed.
+  drawPlayButton(ctx, alpha) {
+    const img = assets.play;
+    if (!img) return;
+    const pa = this.playAnim;
+    const t = this.titleFx.t;
+    const { x, y, r } = TITLE.play;
+    const still = this.fx.reduced;
+    const bob = still ? 0 : Math.sin(t * 1.6) * 7;
+    const sway = still ? 0 : Math.sin(t * 1.1) * 0.035;
+    const breathe = still ? 1 : 1 + Math.sin(t * 2.4) * 0.025;
+    const squash = 1 - pa.press * 0.12;
+    const pop = pa.burst > 0 ? 1 + Math.sin(Math.min(1, pa.burst / 0.35) * Math.PI) * 0.18 : 1;
+    const s = breathe * (1 + pa.hover * 0.07) * pop;
+    const cy = y + bob;
+    this.ui.placePlay(x, cy, r * s);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.globalCompositeOperation = 'screen';
+    const glow = ctx.createRadialGradient(x, cy, r * 0.6, x, cy, r * 1.9);
+    glow.addColorStop(0, `rgba(255, 210, 110, ${0.42 + 0.16 * Math.sin(t * 2.4) + pa.hover * 0.15})`);
+    glow.addColorStop(1, 'rgba(255, 210, 110, 0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(x - r * 2, cy - r * 2, r * 4, r * 4);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.translate(x, cy);
+    ctx.rotate(sway);
+    ctx.scale(s * (1 + pa.press * 0.06), s * squash);
+    const w = img.width * (r * 2 / img.height);
+    ctx.drawImage(img, -w / 2, -r, w, r * 2);
+    // shine: a soft diagonal band sweeping across the disc every few seconds
+    const sweep = (t % 3.4) / 1.1;
+    if (sweep < 1 && !still) {
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.93, 0, Math.PI * 2);
+      ctx.clip();
+      const sx = -r * 1.6 + sweep * r * 3.2;
+      const band = ctx.createLinearGradient(sx - r * 0.35, -r, sx + r * 0.35, r);
+      band.addColorStop(0, 'rgba(255, 255, 255, 0)');
+      band.addColorStop(0.5, 'rgba(255, 255, 255, 0.38)');
+      band.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.fillStyle = band;
+      ctx.fillRect(-r, -r, r * 2, r * 2);
+    }
+    ctx.restore();
+  }
+
   drawTitle(ctx, alpha) {
     const t = this.fx.t;
     if (alpha >= 1) {
@@ -723,7 +830,14 @@ class Game {
     ctx.globalAlpha = alpha;
     this.titleFx.drawWater(ctx, 0, this.titleFish);
     ctx.restore();
-    for (const f of this.titleFish) {
+    const fishBehind = this.titleFish.filter((f) => f.depth < 0);
+    const fishInFront = this.titleFish.filter((f) => f.depth >= 0);
+    for (const f of fishBehind) {
+      f.alpha = alpha * (0.72 + 0.28 * (1 + f.depth));
+      f.draw(ctx);
+    }
+    this.drawPlayButton(ctx, alpha);
+    for (const f of fishInFront) {
       f.alpha = alpha;
       f.draw(ctx);
     }

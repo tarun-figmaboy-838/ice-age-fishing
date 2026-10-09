@@ -395,17 +395,24 @@ html, body {
 }
 .screen.fade-out { opacity: 0; pointer-events: none; }
 .screen[hidden] { display: none; }
-/* The banner (drawn on the canvas) is the title screen; only the Play button sits on top. */
+/* The banner and the play button are drawn on the canvas; .play-hit is the invisible
+   tap and keyboard target laid over the drawn button (positioned from game.js). */
 .screen.start { display: block; background: none; }
-.start-actions {
+.play-hit {
   position: absolute;
-  left: 74%;
-  top: 41%;
-  transform: translateX(-50%);
-  text-align: center;
+  left: 0;
+  top: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
 }
-.play-btn { animation: play-pulse 1.6s ease-in-out infinite; }
-@keyframes play-pulse { 50% { transform: scale(1.07); } }
+.play-hit:focus { outline: none; }
+.play-hit:focus-visible { box-shadow: 0 0 0 0.4em #fff, 0 0 0 0.8em var(--amber); }
+.play-hit:disabled { cursor: default; }
+.start .loading { position: absolute; left: 50%; bottom: 3%; transform: translateX(-50%); }
 .sr-only {
   position: absolute;
   width: 1px;
@@ -440,7 +447,7 @@ html, body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hand, .play-btn, .speech.pop, .caption.pop { animation: none; }
+  .hand, .speech.pop, .caption.pop { animation: none; }
   .hero-fish, .sparkles i, .hero-glow, .prize-burst { animation: none; }
   .scene { transition: none; }
 }

@@ -7,7 +7,9 @@ const ui = new UI();
 const audio = new AudioEngine();
 const game = new Game({ stage, ui, audio });
 
-ui.on('play', () => game.start());
+ui.on('play', () => game.pressPlay());
+ui.on('playHover', (on) => game.onPlayHover(on));
+ui.on('playPress', () => game.onPlayPress());
 ui.on('fishTap', (fish, point) => game.onFishTap(fish, point));
 document.getElementById('stage').addEventListener('pointerdown', (e) => {
   if (e.target.closest('button, .hud, .overlay')) return;

@@ -69,6 +69,9 @@ class UI {
     this.hitsEnabled = false;
     const h = (name) => (e) => { e.preventDefault(); this.emit(name); };
     this.el.play.addEventListener('click', h('play'));
+    this.el.play.addEventListener('pointerenter', () => this.emit('playHover', true));
+    this.el.play.addEventListener('pointerleave', () => this.emit('playHover', false));
+    this.el.play.addEventListener('pointerdown', () => this.emit('playPress'));
     this.el.sound.addEventListener('click', h('sound'));
     this.el.pause.addEventListener('click', h('pause'));
     this.el.resume.addEventListener('click', h('resume'));
@@ -108,6 +111,13 @@ class UI {
     if (!this.lineEl) return;
     this.lineEl.querySelector('.typed').textContent = text.slice(0, count);
     this.lineEl.querySelector('.rest').textContent = text.slice(count);
+  }
+
+  placePlay(x, y, r) {
+    const k = this.scale;
+    const s = this.el.play.style;
+    s.transform = `translate(${((x - r) * k).toFixed(1)}px, ${((y - r) * k).toFixed(1)}px)`;
+    s.width = s.height = `${(2 * r * k).toFixed(1)}px`;
   }
 
   placeSpeech(x, y) {

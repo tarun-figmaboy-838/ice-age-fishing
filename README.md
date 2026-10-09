@@ -42,6 +42,14 @@ original artwork and tools out of the deployment.
   single procedural line, measures each frame's raft anchor and rod tip, and compresses
   everything to WebP.
 
+## Flow
+
+Title banner with a floating play button (fish circle it) → the narrator's opening line →
+Triangle Bay, Pentagon Cove, Hexagon Pass (one catch each, Popo says "Great catch!") → a
+four-sided fish leaps out of the water and Popo wonders what it was → Quadrilateral Waters
+(catch all the four-sided fish) → summary. Story lines live in `STORY` and the
+`discovery` entry in `src/levels.js`.
+
 ## Notes on the supplied art
 
 - The painted raft is a different length in almost every Popo frame, so the build strips the
@@ -51,4 +59,6 @@ original artwork and tools out of the deployment.
   is cut, then cleaned of stray specks. The second sheet is drawn at twice the scale and is
   halved. Unused cells: an irregular 9-gon, a capsule, a second right triangle, a second
   trapezium and a star. Each used fish's side count was checked by measuring its outline.
+- The title banner (`asset/title-banner.png`) and play button (`asset/play-button.png`) are built
+  into `assets/` and embedded as data URLs so the canvas can use them from the file system.
 - No audio files were supplied; music and effects are synthesised with the Web Audio API.
