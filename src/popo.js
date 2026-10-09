@@ -5,12 +5,12 @@ const { assets } = PopoGame;
 const TAU = Math.PI * 2;
 const POPO_SCALE = 1.0;
 
-// Frame picks per sheet (row, col). Each sheet's scale makes Popo the same size everywhere
-// (derived from the body area measured by tools/build-assets.py). The frames hold only the
-// character and rod/paddle; the raft is the shared prop below, so it never changes size.
+// Frame picks per sheet (row, col). The frames hold only the character and rod or paddle; the
+// raft is the shared prop below, so it never changes size. Fishing and casting poses come from
+// one clean sheet and sit Popo on his seat point; rowing frames register on their own raft.
 const SHEETS = {
-  fishing: { scale: 0.93, frames: { idle: [0, 1], blink: [1, 1] } },
-  casting: { scale: 1.0, frames: { lift: [0, 1], up: [0, 2], back: [1, 0], swing: [1, 1], follow: [1, 2], hold: [2, 0], reel: [2, 1], reel2: [2, 2] } },
+  fishing: { scale: 0.63, frames: { idle: [0, 1] } },
+  casting: { scale: 0.63, frames: { lift: [0, 2], up: [0, 2], back: [1, 0], swing: [1, 1], follow: [1, 2], hold: [2, 2], reel: [2, 0], reel2: [2, 1] } },
   rowing: { scale: 0.895, frames: { reach: [0, 0], dip: [0, 1], deep: [0, 2], pull: [1, 1], lift: [1, 2], raise: [2, 1] } },
 };
 
@@ -19,6 +19,8 @@ const SHEETS = {
 // bottom-right corner onto the prop's, which is the steadiest reference in the artwork.
 const PROP = { scale: 0.93, mid: 186, bottom: 383, left: 5, right: 367, bucket: { x: 85, y: 288 } };
 const PROP_RIGHT_DX = (PROP.right - PROP.mid) * PROP.scale;
+// Where Popo sits on the raft prop (measured from the idle frame the prop was cut from).
+const SEAT = { dx: (178 - PROP.mid) * PROP.scale, dy: (373 - PROP.bottom) * PROP.scale };
 
 // Manually inspected pose extents, torso registrations and attachment landmarks.
 // One atlas-wide scale preserves the generated character's proportions in every pose.
@@ -48,8 +50,6 @@ class Popo {
     this.fadeMs = 120;
     this.anim = null;
     this.bobT = Math.random() * TAU;
-    this.blinkIn = 2.5;
-    this.blinkLeft = 0;
     this.tilt = 0;
     this.dip = 0;
     this.lean = 0;
@@ -120,19 +120,6 @@ class Popo {
           this.anim = null;
         }
       }
-    } else if (this.pose.sheet === 'fishing') {
-      // Calm idle: an occasional blink, nothing else loops.
-      if (this.blinkLeft > 0) {
-        this.blinkLeft -= dt;
-        if (this.blinkLeft <= 0) this.setPose('fishing', 'idle', 50);
-      } else {
-        this.blinkIn -= dt;
-        if (this.blinkIn <= 0) {
-          this.blinkIn = 2.8 + Math.random() * 3;
-          this.blinkLeft = 0.14;
-          this.setPose('fishing', 'blink', 40);
-        }
-      }
     }
   }
 
@@ -146,17 +133,21 @@ class Popo {
     const s = SHEETS[sheet].scale * POPO_SCALE;
     const [bx0, by0, bx1, by1] = f.box;
     const rightX = this.anchor.x + PROP_RIGHT_DX;
+    // a frame's reference point in the sheet, and where it lands on stage
+    const [rx, ry, ox, oy] = f.seat
+      ? [f.seat[0], f.seat[1], this.anchor.x + SEAT.dx, this.anchor.y + SEAT.dy]
+      : [f.raftRight, f.raftBottom, rightX, this.anchor.y];
     return {
       img: assets.sheets[sheet].img,
       sx: bx0, sy: by0, sw: bx1 - bx0, sh: by1 - by0,
-      dx: rightX + (bx0 - f.raftRight) * s,
-      dy: this.anchor.y + (by0 - f.raftBottom) * s,
+      dx: ox + (bx0 - rx) * s,
+      dy: oy + (by0 - ry) * s,
       dw: (bx1 - bx0) * s,
       dh: (by1 - by0) * s,
       raftRightX: rightX,
       raftLeftX: this.anchor.x + (PROP.left - PROP.mid) * PROP.scale,
       raftHeight: 80 * PROP.scale,
-      tip: f.rodTip ? { x: rightX + (f.rodTip[0] - f.raftRight) * s, y: this.anchor.y + (f.rodTip[1] - f.raftBottom) * s } : null,
+      tip: f.rodTip ? { x: ox + (f.rodTip[0] - rx) * s, y: oy + (f.rodTip[1] - ry) * s } : null,
     };
   }
 
@@ -352,7 +343,6 @@ class Popo {
     this.anim = null;
     this.line.mode = 'dangle';
     this.line.arc = this.line.tension = 0;
-    this.blinkIn = 0.15;
   }
 
   // The hook hangs from the rod when idle; sequences take over the hook position otherwise.

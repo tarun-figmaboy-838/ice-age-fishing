@@ -30,9 +30,11 @@ BACKGROUNDS = [
 ]
 TITLE = 'title-banner.png'
 PLAY_BUTTON = 'play-button.png'
+# The first fishing sheet only supplies the shared raft prop now (cut from its idle frame).
+PROP_SOURCE = 'ChatGPT Image Oct 6, 2026 at 04_36_14 PM-1.png'
+# Popo's fishing poses: a clean 3x3 sheet of the character and rod only (no raft, line or hook).
+FISHING = 'popo-fishing-clean.png'
 SHEETS = {
-    'fishing': ('ChatGPT Image Oct 6, 2026 at 04_36_14 PM-1.png', True),
-    'casting': ('ChatGPT Image Oct 6, 2026 at 04_36_19 PM-3.png', True),
     'rowing': ('ChatGPT Image Oct 6, 2026 at 04_36_16 PM-2.png', False),
 }
 # Fish sheets, sliced by grid cell. None marks art the game does not use: an irregular
@@ -314,10 +316,11 @@ def measure_frames(im, with_rod):
     return frames
 
 
-def find_rod_tip(px, x0, y0, cell, raft_bottom):
+def find_rod_tip(px, x0, y0, cell, raft_bottom, cell_h=None):
     """The rod is the largest orange component above the bucket and deck; its tip is the end farthest from the body."""
+    cell_h = cell_h or cell
     cx = cy = n = 0
-    for y in range(y0, y0 + cell):
+    for y in range(y0, y0 + cell_h):
         for x in range(x0, x0 + cell):
             r, g, b, a = px[x, y]
             if a > 200 and r > 215 and g > 190 and b > 160 and r - b > 15:
@@ -381,6 +384,29 @@ def content_box(im, f):
     while left < x0 + 10 and raft_level_only(left):
         left += 1
     return [left, top, right, bottom]
+
+
+def measure_character_frames(im):
+    """Frames of a character-only sheet: content box, the seat (where Popo sits: the middle of
+    his lower body at its lowest point), the rod tip, and the body area used for scaling."""
+    px = im.load()
+    cw, ch = im.size[0] // GRID, im.size[1] // GRID
+    frames = []
+    for row in range(GRID):
+        for col in range(GRID):
+            x0, y0 = col * cw, row * ch
+            cream = [(x, y) for y in range(y0, y0 + ch) for x in range(x0, x0 + cw)
+                     if (lambda r, g, b, a: a > 200 and r > 215 and g > 190 and b > 160 and r - b > 15)(*px[x, y])]
+            top = min(y for _, y in cream)
+            bottom = max(y for _, y in cream)
+            low = [(x, y) for x, y in cream if y > bottom - (bottom - top) * 0.3]
+            seat = [round(sum(x for x, _ in low) / len(low)), bottom]
+            box = im.crop((x0, y0, x0 + cw, y0 + ch)).getchannel('A').point(lambda v: 255 if v > 20 else 0).getbbox()
+            tip, _ = find_rod_tip(px, x0, y0, cw, y0 + ch + 135, ch)
+            frames.append(dict(row=row, col=col, cellX=x0, cellY=y0, cellW=cw, cellH=ch,
+                               box=[x0 + box[0], y0 + box[1], x0 + box[2], y0 + box[3]],
+                               seat=[seat[0], seat[1]], rodTip=tip, bodyArea=len(cream)))
+    return frames
 
 
 def build_props(idle_cell):
@@ -475,15 +501,20 @@ def main():
     play.save(os.path.join(OUT, 'sprites', 'play.webp'), 'WEBP', quality=92, method=6)
 
     data = {'sheets': {}}
+    prop = Image.open(os.path.join(SRC, PROP_SOURCE)).convert('RGBA')
+    clear_neighbour_bleed(prop)
+    erase_line_and_hook(prop, measure_frames(prop, with_rod=True))
+    build_props(prop.crop((418, 0, 836, 418)))
+
+    fishing = Image.open(os.path.join(SRC, FISHING)).convert('RGBA')
+    remove_islands(fishing, min_size=300)
+    fishing.save(os.path.join(OUT, 'sprites', 'popo-fishing.webp'), 'WEBP', quality=90, method=6)
+    data['sheets']['fishing'] = dict(width=fishing.size[0], height=fishing.size[1], frames=measure_character_frames(fishing))
+    print('sheet fishing (clean) measured')
+
     for key, (name, erase) in SHEETS.items():
         im = Image.open(os.path.join(SRC, name)).convert('RGBA')
-        if erase:
-            clear_neighbour_bleed(im)
         frames = measure_frames(im, with_rod=erase)
-        if erase:
-            erase_line_and_hook(im, frames)
-        if key == 'fishing':
-            build_props(im.crop((418, 0, 836, 418)))
         strip_raft(im, frames)
         for f in frames:
             f['box'] = content_box(im, f)

@@ -52,9 +52,10 @@ four-sided fish leaps out of the water and Popo wonders what it was → Quadrila
 
 ## Notes on the supplied art
 
-- The painted raft is a different length in almost every Popo frame, so the build strips the
-  raft, rope and bucket out of each frame and the game draws one shared raft prop (cut from
-  the idle frame) under the character in every state.
+- Popo's fishing and casting poses come from `asset/popo-fishing-clean.png`: a clean 3x3 sheet
+  of the character and rod only. Each pose is seated on one shared raft prop (cut from the
+  first fishing sheet's idle frame), so the raft never changes between poses. The rowing frames
+  have their painted raft stripped by the build and sit on the same prop.
 - Fish come from the two fish sheets in `asset/`, sliced by grid cell with a margin so no fish
   is cut, then cleaned of stray specks. The second sheet is drawn at twice the scale and is
   halved. Unused cells: an irregular 9-gon, a capsule, a second right triangle, a second
