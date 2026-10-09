@@ -42,7 +42,7 @@ const SHAPES = {
   semicircle: { shape: 'semicircle', name: 'Semicircle', atlas: 'semicircle', categories: ['semicircle'],
     lines: ['1 curved side, 1 straight side', '2 corners'], fact: 'Half of a circle.' },
   // a shape family used as a challenge target; it has no fish of its own
-  quadrilateral: { shape: 'quadrilateral', name: 'Four-sided', sides: 4, categories: ['quadrilateral'] },
+  quadrilateral: { shape: 'quadrilateral', name: 'Quadrilateral', sides: 4, categories: ['quadrilateral'] },
 };
 
 // One challenge per level. A challenge names a target shape (or a shape family such as

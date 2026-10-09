@@ -46,8 +46,8 @@ original artwork and tools out of the deployment.
 
 Title banner with a floating play button (fish circle it) → the narrator's opening line →
 Triangle Bay, Pentagon Cove, Hexagon Pass (one catch each, Popo says "Great catch!") → a
-four-sided fish leaps out of the water and Popo wonders what it was → Quadrilateral Waters
-(catch all the four-sided fish) → summary. Story lines live in `STORY` and the
+quadrilateral fish leaps out of the water and Popo wonders what it was → Quadrilateral Waters
+(catch all the quadrilateral fish except the trapezium) → summary. Story lines live in `STORY` and the
 `discovery` entry in `src/levels.js`.
 
 ## Notes on the supplied art
