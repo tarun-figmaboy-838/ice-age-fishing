@@ -80,11 +80,20 @@ def strip_raft(im, frames):
             for x in range(zone[0], min(cell, zone[2])):
                 if thick[x, y] and mp[x, y]:
                     cp[x, y] = 255
-        # rope strands and shading that touch the cleared raft go with it
+        # rope strands and shading that touch the cleared raft go with it. The raft's left end
+        # (bucket side, where the character never reaches) is cleared outright, and so is any
+        # dark shading in the deck band, which is the painted raft's shadow, not the character.
         grown = cleared.filter(ImageFilter.MaxFilter(7)).load()
+        left_end = f['raftLeft'] - x0 + 40
+        deck_top = bottom - 95
         for y in range(max(0, zone[1]), min(cell, zone[3])):
             for x in range(zone[0], min(cell, zone[2])):
-                if cp[x, y] or (grown[x, y] and mp[x, y]):
+                r, g, b, a = px[x0 + x, y0 + y]
+                if a == 0:
+                    continue
+                in_deck = y >= deck_top
+                dark = max(r, g, b) < 110 and r - b > 25 and r >= 45
+                if cp[x, y] or (mp[x, y] and grown[x, y]) or (in_deck and x < left_end) or (in_deck and dark):
                     px[x0 + x, y0 + y] = (0, 0, 0, 0)
 
 

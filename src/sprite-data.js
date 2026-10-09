@@ -20,7 +20,7 @@ PopoGame.SHEET_DATA = {
      103
     ],
     "box": [
-     24,
+     50,
      96,
      368,
      389
@@ -41,7 +41,7 @@ PopoGame.SHEET_DATA = {
      130
     ],
     "box": [
-     428,
+     449,
      122,
      785,
      390
@@ -62,7 +62,7 @@ PopoGame.SHEET_DATA = {
      123
     ],
     "box": [
-     842,
+     866,
      115,
      1205,
      390
@@ -83,7 +83,7 @@ PopoGame.SHEET_DATA = {
      515
     ],
     "box": [
-     24,
+     48,
      508,
      370,
      789
@@ -104,7 +104,7 @@ PopoGame.SHEET_DATA = {
      527
     ],
     "box": [
-     428,
+     448,
      519,
      786,
      789
@@ -125,7 +125,7 @@ PopoGame.SHEET_DATA = {
      513
     ],
     "box": [
-     846,
+     867,
      506,
      1206,
      789
@@ -146,7 +146,7 @@ PopoGame.SHEET_DATA = {
      936
     ],
     "box": [
-     24,
+     48,
      927,
      386,
      1186
@@ -167,7 +167,7 @@ PopoGame.SHEET_DATA = {
      934
     ],
     "box": [
-     426,
+     448,
      926,
      786,
      1188
@@ -188,7 +188,7 @@ PopoGame.SHEET_DATA = {
      916
     ],
     "box": [
-     842,
+     867,
      908,
      1206,
      1189
@@ -215,7 +215,7 @@ PopoGame.SHEET_DATA = {
      201
     ],
     "box": [
-     26,
+     46,
      188,
      362,
      403
@@ -236,7 +236,7 @@ PopoGame.SHEET_DATA = {
      124
     ],
     "box": [
-     439,
+     461,
      121,
      790,
      403
@@ -257,7 +257,7 @@ PopoGame.SHEET_DATA = {
      129
     ],
     "box": [
-     856,
+     878,
      114,
      1208,
      404
@@ -278,7 +278,7 @@ PopoGame.SHEET_DATA = {
      475
     ],
     "box": [
-     25,
+     48,
      472,
      387,
      806
@@ -299,7 +299,7 @@ PopoGame.SHEET_DATA = {
      537
     ],
     "box": [
-     438,
+     461,
      532,
      827,
      806
@@ -341,7 +341,7 @@ PopoGame.SHEET_DATA = {
      993
     ],
     "box": [
-     28,
+     51,
      963,
      370,
      1174
@@ -362,7 +362,7 @@ PopoGame.SHEET_DATA = {
      986
     ],
     "box": [
-     438,
+     462,
      955,
      781,
      1173
@@ -383,7 +383,7 @@ PopoGame.SHEET_DATA = {
      983
     ],
     "box": [
-     855,
+     876,
      959,
      1197,
      1173
@@ -406,7 +406,7 @@ PopoGame.SHEET_DATA = {
     "raftBottom": 371,
     "bodyArea": 9985,
     "box": [
-     22,
+     47,
      118,
      383,
      378
@@ -423,7 +423,7 @@ PopoGame.SHEET_DATA = {
     "raftBottom": 370,
     "bodyArea": 9479,
     "box": [
-     440,
+     465,
      138,
      824,
      392
@@ -440,7 +440,7 @@ PopoGame.SHEET_DATA = {
     "raftBottom": 371,
     "bodyArea": 9890,
     "box": [
-     860,
+     884,
      161,
      1228,
      410
@@ -457,7 +457,7 @@ PopoGame.SHEET_DATA = {
     "raftBottom": 785,
     "bodyArea": 10273,
     "box": [
-     24,
+     49,
      545,
      390,
      796
@@ -474,7 +474,7 @@ PopoGame.SHEET_DATA = {
     "raftBottom": 785,
     "bodyArea": 9880,
     "box": [
-     441,
+     466,
      534,
      806,
      791
@@ -491,7 +491,7 @@ PopoGame.SHEET_DATA = {
     "raftBottom": 785,
     "bodyArea": 10951,
     "box": [
-     865,
+     888,
      531,
      1229,
      791
@@ -508,7 +508,7 @@ PopoGame.SHEET_DATA = {
     "raftBottom": 1176,
     "bodyArea": 10045,
     "box": [
-     24,
+     48,
      917,
      388,
      1183
@@ -525,7 +525,7 @@ PopoGame.SHEET_DATA = {
     "raftBottom": 1177,
     "bodyArea": 10459,
     "box": [
-     444,
+     468,
      926,
      810,
      1184
@@ -542,7 +542,7 @@ PopoGame.SHEET_DATA = {
     "raftBottom": 1177,
     "bodyArea": 10311,
     "box": [
-     860,
+     884,
      917,
      1227,
      1184
