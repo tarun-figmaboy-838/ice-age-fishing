@@ -243,6 +243,7 @@ class AudioEngine {
       case 'paddle': this.noise({ dur: 0.25, type: 'bandpass', freq: 900, to: 300, q: 0.8, gain: 0.14 }); break;
       case 'complete': [392.0, 523.25, 659.25, 783.99].forEach((n, i) => { this.tone({ freq: n, t: now + i * 0.15, type: 'triangle', dur: 0.5, gain: 0.12 }); this.bell(n * 2, now + i * 0.15, 0.06); }); break;
       case 'hint': this.tone({ freq: 880, dur: 0.18, gain: 0.07 }); break;
+      case 'bloop': this.tone({ freq: 420, to: 980, dur: 0.12, gain: 0.09 }); this.tone({ freq: 620, to: 1300, t: now + 0.08, dur: 0.09, gain: 0.05 }); break;
       default: break;
     }
   }

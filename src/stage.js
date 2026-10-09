@@ -50,8 +50,9 @@ class Stage {
 }
 
 // Where the answer fish may swim: deep water, clear of the surface, seabed, Popo's raft and the HUD strip.
+// Fish use the whole underwater stage, from just below the raft down over the sand.
 function swimArea(waterline) {
-  return { left: 340, right: STAGE_W - 70, top: waterline + 80, bottom: SEABED_Y - 60 };
+  return { left: 40, right: STAGE_W - 40, top: waterline + 55, bottom: SEABED_Y + 70 };
 }
 
 function raftAnchor(waterline) {

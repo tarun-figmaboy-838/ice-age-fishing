@@ -35,6 +35,7 @@ async function castTo(game, fish, token) {
     if (!splashed && y >= game.waterline) {
       splashed = true;
       fx.splash(x, game.waterline, false);
+      game.startleAround({ x, y: game.waterline + 60 }, 300, fish);
       audio.play('splashSmall');
     }
   });
@@ -106,6 +107,7 @@ async function correctCatch(game, fish) {
     popo.line.tension = 0;
     popo.idle();
     game.collect(fish);
+    game.cheer();
     await clock.wait(420, token);
 
     state.phase = PHASE.CELEBRATING;

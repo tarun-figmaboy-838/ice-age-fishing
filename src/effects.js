@@ -44,6 +44,25 @@ class Effects {
     this.ripples = Array.from({ length: 6 }, () => ({ life: 0 }));
     this.drops = Array.from({ length: 28 }, () => ({ life: 0 }));
     this.sparkles = Array.from({ length: 14 }, () => ({ life: 0 }));
+    this.mouthBubbles = Array.from({ length: 48 }, () => ({ life: 0 }));
+    this.pops = Array.from({ length: 12 }, () => ({ life: 0 }));
+  }
+
+  // A little stream of bubbles from a fish's mouth (or a tap in the water). Each one drifts
+  // forward, rises, grows a touch and pops when it reaches the surface.
+  puff(x, y, dir = 0, count = 2, big = false) {
+    if (this.reduced) count = Math.min(count, 1);
+    let made = 0;
+    for (const b of this.mouthBubbles) {
+      if (b.life > 0) continue;
+      Object.assign(b, {
+        x, y, vx: dir * rand(16, 34) + rand(-6, 6), vy: -rand(14, 26),
+        r: (big ? rand(3.6, 6.2) : rand(2.2, 4.2)) * (1 - made * 0.1),
+        wobble: rand(0, TAU), delay: made * rand(0.09, 0.15), life: 1, decay: rand(0.16, 0.24),
+      });
+      made += 1;
+      if (made >= count) break;
+    }
   }
 
   setWaterline(y) {
@@ -128,7 +147,7 @@ class Effects {
   }
 
   clearTransient() {
-    for (const pool of [this.ripples, this.drops, this.sparkles]) {
+    for (const pool of [this.ripples, this.drops, this.sparkles, this.mouthBubbles, this.pops]) {
       for (const particle of pool) particle.life = 0;
     }
     this.dipBubbles = [];
@@ -212,6 +231,23 @@ class Effects {
       s.vy += 60 * dt;
       s.life -= dt * 1.6;
     }
+    for (const b of this.mouthBubbles) {
+      if (b.life <= 0) continue;
+      if (b.delay > 0) { b.delay -= dt; continue; }
+      b.vx *= 1 - Math.min(1, dt * 1.6);
+      b.vy = Math.max(-64, b.vy - dt * 26);
+      b.wobble += dt * 6;
+      b.x += (b.vx + Math.sin(b.wobble) * 7) * dt;
+      b.y += b.vy * dt;
+      b.r = Math.min(b.r + dt * 0.5, 7.5);
+      b.life -= dt * b.decay;
+      if (b.y <= this.waterline + 6) {
+        const pop = this.pops.find((p) => p.life <= 0);
+        if (pop) Object.assign(pop, { x: b.x, y: this.waterline + 4, r: b.r, life: 1 });
+        b.life = 0;
+      }
+    }
+    for (const p of this.pops) if (p.life > 0) p.life -= dt * 4;
   }
 
   drawLightWash(ctx, offsetX) {
@@ -278,6 +314,30 @@ class Effects {
 
   // Light playing just under the surface: soft sliding streaks and twinkles on the waterline.
   drawFront(ctx) {
+    for (const b of this.mouthBubbles) {
+      if (b.life <= 0 || b.delay > 0) continue;
+      const a = Math.min(1, b.life * 3);
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, TAU);
+      ctx.fillStyle = `rgba(215, 245, 255, ${0.22 * a})`;
+      ctx.fill();
+      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = `rgba(255, 255, 255, ${0.75 * a})`;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(b.x - b.r * 0.35, b.y - b.r * 0.35, b.r * 0.3, 0, TAU);
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.9 * a})`;
+      ctx.fill();
+    }
+    for (const p of this.pops) {
+      if (p.life <= 0) continue;
+      const k = 1 - p.life;
+      ctx.strokeStyle = `rgba(255, 255, 255, ${p.life * 0.8})`;
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y, p.r + k * 9, (p.r + k * 9) * 0.45, 0, 0, TAU);
+      ctx.stroke();
+    }
     for (const b of this.dipBubbles || []) {
       if (b.life <= 0) continue;
       ctx.strokeStyle = `rgba(235, 250, 255, ${Math.min(0.7, b.life * 2)})`;

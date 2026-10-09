@@ -23,11 +23,9 @@ function shapeSymbol(key) {
     case 'oval': body = `<ellipse cx="32" cy="32" rx="28" ry="18" ${style}/>`; break;
     case 'triangle': body = `<polygon points="32,8 57,54 7,54" ${style}/>`; break;
     case 'square': body = `<rect x="11" y="11" width="42" height="42" ${style}/>`; break;
-    case 'square-tilted': body = `<polygon points="32,5 59,32 32,59 5,32" ${style}/>`; break;
     case 'rectangle': body = `<rect x="5" y="17" width="54" height="30" ${style}/>`; break;
     case 'parallelogram': body = `<polygon points="19,16 61,16 45,48 3,48" ${style}/>`; break;
     case 'trapezium': body = `<polygon points="19,16 45,16 60,48 4,48" ${style}/>`; break;
-    case 'kite': body = `<polygon points="32,4 56,27 32,60 8,27" ${style}/>`; break;
     case 'rhombus': body = `<polygon points="32,12 58,32 32,52 6,32" ${style}/>`; break;
     case 'quadrilateral': body = `<polygon points="10,16 50,8 58,44 18,56" ${style}/>`; break;
     default: {
@@ -40,8 +38,8 @@ function shapeSymbol(key) {
 }
 
 // Draws one fish from the atlas into a canvas element, so DOM icons stay crisp at any size.
-function fishCanvas(atlasIndex, size) {
-  const [x0, y0, x1, y1] = assets.fish.boxes[atlasIndex];
+function fishCanvas(sprite, size) {
+  const [x0, y0, x1, y1] = assets.fish.boxes[sprite];
   const w = x1 - x0;
   const h = y1 - y0;
   const k = size / Math.max(w, h);

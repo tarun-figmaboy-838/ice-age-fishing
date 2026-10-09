@@ -46,10 +46,9 @@ original artwork and tools out of the deployment.
 
 - The painted raft is a different length in almost every Popo frame, so the build strips the
   raft, rope and bucket out of each frame and the game draws one shared raft prop (cut from
-  the idle frame) under the character in every state. That also repairs the casting frame
-  whose raft was cut off at the cell edge.
-- The fish atlas had no heptagon and no rhombus. The build appends both: the heptagon is a
-  new glossy body wearing the second octagon's fins and face, and the rhombus is the tilted
-  square stretched along one diagonal (all four sides stay equal) and recoloured violet.
-- The orange diamond is a kite and the blue diamond a rotated square; both are taught as such.
+  the idle frame) under the character in every state.
+- Fish come from the two fish sheets in `asset/`, sliced by grid cell with a margin so no fish
+  is cut, then cleaned of stray specks. The second sheet is drawn at twice the scale and is
+  halved. Unused cells: an irregular 9-gon, a capsule, a second right triangle, a second
+  trapezium and a star. Each used fish's side count was checked by measuring its outline.
 - No audio files were supplied; music and effects are synthesised with the Web Audio API.

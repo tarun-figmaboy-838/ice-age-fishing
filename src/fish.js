@@ -17,11 +17,16 @@ class Fish {
     this.baseY = y;
     this.targetY = y;
     this.dir = dir;
-    this.cruise = 45 + Math.random() * 30;
+    this.cruise = 52 + Math.random() * 34;
     this.speed = this.cruise;
     this.turn = null;
     this.turnIn = 4 + Math.random() * 5;
-    this.wanderIn = 2 + Math.random() * 3;
+    this.wanderIn = 1 + Math.random() * 2.5;
+    this.dartIn = 4 + Math.random() * 8;
+    this.dart = null;
+    this.puffs = 0;
+    this.trail = 0;
+    this.reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.driftPhase = Math.random() * TAU;
     this.driftAmp = 8 + Math.random() * 8;
     this.driftFreq = 0.25 + Math.random() * 0.2;
@@ -49,6 +54,32 @@ class Fish {
   wiggle(subtle = false) {
     this.subtleWiggle = subtle;
     this.wiggleT = 0;
+  }
+
+  // A quick playful burst of speed, leaving a short bubble trail.
+  startDart(boost = 2.6) {
+    if (this.reduced || this.frozen || this.escaping) return;
+    this.dart = { t: 0, dur: 0.6, boost };
+    this.trail = 0.4;
+  }
+
+  // Swim toward something interesting (a tap in the water), then carry on.
+  lookAt(point) {
+    if (this.frozen || this.escaping) return;
+    if (Math.sign(point.x - this.x) !== this.dir) this.startTurn();
+    this.targetY = point.y;
+    this.wanderIn = 2.5;
+    this.puffs += 1;
+  }
+
+  // Startled by a splash: dart away from it.
+  startle(point) {
+    if (this.frozen || this.escaping) return;
+    const away = Math.sign(this.x - point.x) || 1;
+    if (away !== this.dir) { this.dir = away; this.turn = null; this.speed = this.cruise * 0.4; }
+    this.wiggle(true);
+    this.startDart(3);
+    this.puffs += 2;
   }
 
   // Dash off to the right, then come back in from the edge at cruising speed.
@@ -96,6 +127,8 @@ class Fish {
         if (k >= 1) {
           this.dir *= -1;
           this.turn = { stage: 'speed', t: 0 };
+          this.wiggle(true);
+          if (Math.random() < 0.5) this.puffs += 1;
         }
       } else {
         this.speed = this.cruise * k;
@@ -113,9 +146,22 @@ class Fish {
     const edgeDistance = this.dir > 0 ? area.right - this.w / 2 - 10 - this.x : this.x - area.left - this.w / 2 - 10;
     if (!this.turn && edgeDistance < stoppingDistance) this.startTurn();
     if (!this.turn) {
-      const cruise = this.cruise * (1 + Math.sin(this.bobPhase * 0.37) * 0.06);
-      this.speed += (cruise - this.speed) * Math.min(1, dt * 1.4);
+      let cruise = this.cruise * (1 + Math.sin(this.bobPhase * 0.37) * 0.06);
+      if (this.dart) {
+        this.dart.t += dt;
+        const k = this.dart.t / this.dart.dur;
+        cruise *= 1 + (this.dart.boost - 1) * Math.max(0, Math.sin(Math.min(1, k) * Math.PI));
+        if (k >= 1) this.dart = null;
+      } else {
+        this.dartIn -= dt;
+        if (this.dartIn <= 0) {
+          this.dartIn = 6 + Math.random() * 9;
+          this.startDart();
+        }
+      }
+      this.speed += (cruise - this.speed) * Math.min(1, dt * (this.dart ? 6 : 1.4));
     }
+    if (this.trail > 0) this.trail -= dt;
     this.x += this.dir * this.speed * dt;
     const half = this.w / 2 + 10;
     if (this.x < area.left + half) {
@@ -129,10 +175,10 @@ class Fish {
     // slow wandering between depths plus a gentle drift
     this.wanderIn -= dt;
     if (this.wanderIn <= 0) {
-      this.wanderIn = 3 + Math.random() * 4;
+      this.wanderIn = 2.5 + Math.random() * 3.5;
       this.targetY = area.top + this.h / 2 + Math.random() * (area.bottom - area.top - this.h);
     }
-    this.baseY += (this.targetY - this.baseY) * Math.min(1, dt * 0.35);
+    this.baseY += (this.targetY - this.baseY) * Math.min(1, dt * 0.55);
     this.driftPhase += dt * this.driftFreq * TAU;
 
     // keep clear of the other fish

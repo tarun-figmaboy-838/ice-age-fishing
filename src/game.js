@@ -204,12 +204,46 @@ class Game {
     return best;
   }
 
+  puffFrom(fish, count, big = false) {
+    this.fx.puff(fish.x + fish.dir * fish.w * 0.42 * fish.scale, fish.y + fish.h * 0.1 * fish.scale, fish.dir, count, big);
+  }
+
+  // Splashes make nearby fish dart away; a catch makes the others wiggle and blow bubbles.
+  startleAround(point, radius = 320, except = null) {
+    for (const f of state.fish) {
+      if (f === except || f.gone || f === state.selectedFish) continue;
+      if (Math.hypot(f.x - point.x, f.y - point.y) < radius) f.startle(point);
+    }
+  }
+
+  cheer() {
+    for (const f of state.fish) {
+      if (f.gone || f.frozen) continue;
+      f.wiggle();
+      f.puffs += 3;
+    }
+  }
+
+  // Tapping the water is just for fun: bubbles, a soft bloop, and curious fish come to look.
+  onWaterTap(point) {
+    if (state.paused || state.phase === PHASE.INTRO || state.phase === PHASE.COMPLETE) return;
+    if (point.y < this.waterline) return;
+    this.fx.puff(point.x, point.y, 0, 5, true);
+    if (point.y < this.waterline + 40) this.fx.ripple(point.x, this.waterline, 0.6);
+    this.audio.play('bloop');
+    for (const f of state.fish) {
+      if (f.gone || f === state.selectedFish) continue;
+      if (Math.hypot(f.x - point.x, f.y - point.y) < 300) f.lookAt(point);
+    }
+  }
+
   onFishTap(tapped, point) {
     const fish = point ? this.fishAt(point, tapped) : tapped;
     if (state.paused || state.phase !== PHASE.READY || state.selectedFish || fish.gone || fish.escaping) return;
     state.selectedFish = fish;
     state.idleTime = 0;
     this.clearHint();
+    this.puffFrom(fish, 4, true);
     this.instructionRevert = 0;
     this.ui.setInstruction(this.challengeText(), state.target);
     if (matchesTarget(fish.key, state.target)) {
@@ -325,9 +359,17 @@ class Game {
     this.popo.waterResponse = this.fx.raftResponse(this.popo.anchor.x);
     for (const f of state.fish) {
       f.update(dt, this.area, state.fish);
-      if (f.breath <= 0 && !f.gone && !f.frozen && !f.escaping) {
-        f.breath = 8 + Math.random() * 9;
-        this.fx.bubbleAt(f.x + f.dir * f.w * 0.42, f.y - f.h * 0.05, 1.6 + Math.random() * 1.4);
+      if (f.gone) continue;
+      if (f.breath <= 0 && !f.frozen && !f.escaping) {
+        f.breath = 1.6 + Math.random() * 2.6;
+        f.puffs += 1 + Math.floor(Math.random() * 3);
+      }
+      if (f.puffs > 0) {
+        this.puffFrom(f, f.puffs);
+        f.puffs = 0;
+      }
+      if (f.trail > 0 && Math.random() < dt * 14) {
+        this.fx.puff(f.x - f.dir * f.w * 0.45, f.y + (Math.random() - 0.5) * f.h * 0.3, -f.dir * 0.4, 1);
       }
     }
     if (this.popo.line.mode === 'attached' && state.selectedFish) {
