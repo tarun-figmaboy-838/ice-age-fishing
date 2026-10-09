@@ -64,9 +64,9 @@ class Game {
   showIdleScene() {
     this.applyLocation();
     if (state.phase === PHASE.INTRO && !this.titleFish.length) {
-      const orbit = spawnFish(TITLE.orbit.fish, TITLE.sides[0].area, 0.62);
+      const orbit = spawnFish(TITLE.orbit.fish, TITLE.sides[0].area, 0.46);
       orbit.forEach((f, i) => { f.orbit = (i / orbit.length) * Math.PI * 2; });
-      const sides = TITLE.sides.flatMap((side) => spawnFish(side.fish, side.area, 0.62).map((f) => Object.assign(f, { zone: side.area })));
+      const sides = TITLE.sides.flatMap((side) => spawnFish(side.fish, side.area, 0.46).map((f) => Object.assign(f, { zone: side.area })));
       this.titleFish = [...orbit, ...sides];
     }
     if (!this.running) {
