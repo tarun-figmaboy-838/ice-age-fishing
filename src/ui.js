@@ -94,23 +94,35 @@ class UI {
   }
 
   // A story line: Popo's speech bubble (anchored at a stage point) or the narrator's caption.
-  showLine(who, text) {
+  // Every word is laid out up front (hidden) so the bubble never resizes as words appear.
+  showLine(who, words) {
     this.hideLines();
     const el = who === 'narrator' ? this.el.caption : this.el.speech;
-    el.querySelector('.typed').textContent = '';
-    el.querySelector('.rest').textContent = text;
+    const line = el.querySelector('.line');
+    line.innerHTML = '';
+    this.wordEls = words.map((w, i) => {
+      const span = document.createElement('span');
+      span.className = w.em ? 'w em' : 'w';
+      span.textContent = i < words.length - 1 ? `${w.text} ` : w.text;
+      line.appendChild(span);
+      return span;
+    });
     el.hidden = false;
-    el.classList.remove('pop');
+    el.classList.remove('pop', 'bump');
     void el.offsetWidth;
     el.classList.add('pop');
     this.el.hud.classList.add('talking');
     this.lineEl = el;
   }
 
-  typeLine(text, count) {
-    if (!this.lineEl) return;
-    this.lineEl.querySelector('.typed').textContent = text.slice(0, count);
-    this.lineEl.querySelector('.rest').textContent = text.slice(count);
+  revealWord(i, bump) {
+    const span = this.wordEls && this.wordEls[i];
+    if (span) span.classList.add('in');
+    if (bump && this.lineEl === this.el.speech) {
+      this.el.speech.classList.remove('pop', 'bump');
+      void this.el.speech.offsetWidth;
+      this.el.speech.classList.add('bump');
+    }
   }
 
   placePlay(x, y, r) {
@@ -130,7 +142,9 @@ class UI {
     this.el.caption.hidden = true;
     this.el.hud.classList.remove('talking');
     this.lineEl = null;
+    this.wordEls = null;
   }
+
 
   setScale(scale) {
     this.scale = scale;

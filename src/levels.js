@@ -58,7 +58,17 @@ const LOCATIONS = [
     challenges: [{ target: 'hexagon', others: ['pentagon', 'octagon'] }] },
   { name: 'Quadrilateral Waters', background: 3, waterline: 388,
     // before rowing here, a fish Popo has never seen leaps out of the water
-    discovery: { fish: 'rhombus', lines: ["Woah! I haven't seen that one before!", 'What kind of fish was that?', "Let's find out!"] },
+    discovery: {
+      fish: 'rhombus',
+      woah: [
+        { who: 'popo', text: '*Woah!*', cue: { word: 0, do: 'exclaim' } },
+        { who: 'popo', text: "I haven't seen *that* one before!" },
+      ],
+      after: [
+        { who: 'popo', text: 'What *kind* of fish was that?', cue: { word: 1, do: 'wonder' } },
+        { who: 'popo', text: "Let's find *out!*", cue: { word: 2, do: 'hop' } },
+      ],
+    },
     challenges: [{ target: 'quadrilateral', all: true, fishScale: 0.9,
       fish: ['square', 'rectangle', 'parallelogram', 'rhombus', 'triangle-right', 'oval'] }] },
 ];
@@ -85,10 +95,15 @@ function sideFact(shape) {
   return shape.fact || `${shape.sides} straight sides and ${shape.sides} corners.`;
 }
 
-// Story lines: the narrator opens the journey, Popo cheers every catch.
+// Story lines, delivered word by word. *Stressed* words land bigger with a boing, and a cue
+// fires a moment in the scene when its word appears (see Game.storyCue).
 const STORY = {
-  intro: [{ who: 'narrator', text: 'Popo loves fishing. And today, he wants to catch all kinds of fish!' }],
-  catch: 'Great catch!',
+  intro: [
+    { who: 'narrator', text: 'Popo *loves* fishing.', cue: { word: 1, do: 'hop' } },
+    { who: 'narrator', text: 'And today…' },
+    { who: 'narrator', text: 'he wants to catch *all* kinds of fish!', cue: { word: 4, do: 'fishIn' } },
+  ],
+  catch: { who: 'popo', text: '*Great* catch!', cue: { word: 0, do: 'hop' } },
 };
 
 Object.assign(PopoGame, { TERMS, SHAPES, LOCATIONS, STORY, getShape, matchesTarget, challengeFish, learningLines, sideFact });

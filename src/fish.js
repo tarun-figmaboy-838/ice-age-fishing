@@ -1,9 +1,11 @@
 (function (PopoGame) {
 'use strict';
-const { assets, getShape } = PopoGame;
+const { assets, getShape, STAGE_W } = PopoGame;
 
 const TAU = Math.PI * 2;
-const FISH_SCALE = 0.56;
+const FISH_SCALE = 0.45;
+// Scenery fish are smaller still and a little faded, so they read as background life.
+const AMBIENT_SCALE = 0.62;
 
 class Fish {
   constructor(key, x, y, dir, sizeScale = 1) {
@@ -259,5 +261,60 @@ function spawnFish(keys, area, sizeScale = 1) {
   });
 }
 
-Object.assign(PopoGame, { FISH_SCALE, Fish, spawnFish });
+// A scenery fish: swims straight across at its own depth and pace, wraps around off-screen,
+// and is never tappable.
+class AmbientFish extends Fish {
+  constructor(key, area, dir, fromEdge = false) {
+    super(key, 0, 0, dir, AMBIENT_SCALE);
+    this.alpha = 0.72;
+    this.cruise = 28 + Math.random() * 44;
+    this.leaving = false;
+    this.place(area, !fromEdge);
+  }
+
+  // Swim off and don't come back (used when a new challenge needs a different set).
+  leave() {
+    this.leaving = true;
+    this.cruise = Math.max(this.cruise, 90);
+  }
+
+  place(area, anywhere) {
+    this.baseY = area.top + this.h / 2 + Math.random() * (area.bottom - area.top - this.h);
+    this.x = anywhere ? area.left + Math.random() * (area.right - area.left) : (this.dir > 0 ? -this.w : STAGE_W + this.w);
+  }
+
+  update(dt, area) {
+    this.bobPhase += dt * 2.2;
+    this.driftPhase += dt * this.driftFreq * TAU;
+    this.breath -= dt;
+    this.x += this.dir * this.cruise * dt;
+    this.y = this.baseY + Math.sin(this.driftPhase) * this.driftAmp;
+    if ((this.dir > 0 && this.x > STAGE_W + this.w) || (this.dir < 0 && this.x < -this.w)) {
+      if (this.leaving) {
+        this.gone = true;
+        return;
+      }
+      this.cruise = 28 + Math.random() * 44;
+      this.place(area, false);
+    }
+  }
+}
+
+// Scenery fish never share a shape with the target, so nothing untappable looks like an answer.
+const AMBIENT_SHAPES = ['circle', 'oval', 'semicircle', 'triangle', 'square', 'rectangle', 'rhombus', 'parallelogram',
+  'trapezium', 'pentagon', 'hexagon', 'octagon', 'nonagon', 'decagon'];
+
+// Keeps the scenery fish that still fit the new target, sends the rest away, and brings
+// newcomers in from the edges, so the set changes without anything popping in or out.
+function refreshAmbient(current, count, area, isTarget) {
+  const staying = current.filter((f) => !f.leaving && !f.gone && !isTarget(f.key)).slice(0, count);
+  for (const f of current) if (!staying.includes(f) && !f.gone) f.leave();
+  const used = new Set(staying.map((f) => f.key));
+  const pool = AMBIENT_SHAPES.filter((key) => !isTarget(key) && !used.has(key)).sort(() => Math.random() - 0.5);
+  const fresh = Array.from({ length: count - staying.length }, (_, i) =>
+    new AmbientFish(pool[i % pool.length], area, (staying.length + i) % 2 ? 1 : -1, current.length > 0));
+  return [...current.filter((f) => f.leaving && !f.gone), ...staying, ...fresh];
+}
+
+Object.assign(PopoGame, { FISH_SCALE, Fish, spawnFish, refreshAmbient });
 })(window.PopoGame = window.PopoGame || {});

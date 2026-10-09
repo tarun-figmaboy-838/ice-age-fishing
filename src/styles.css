@@ -155,7 +155,21 @@ html, body {
 /* ---------- story: Popo's speech bubble and the narrator's caption ---------- */
 .speech, .caption { position: absolute; pointer-events: none; z-index: 3; }
 .speech[hidden], .caption[hidden] { display: none; }
-.speech .rest, .caption .rest { visibility: hidden; }
+.line .w { display: inline-block; visibility: hidden; white-space: pre; }
+.line .w.in { visibility: visible; animation: word-in 0.32s cubic-bezier(0.2, 1.8, 0.4, 1); }
+.line .w.em { color: #e8650c; font-size: 1.22em; text-shadow: 0 0.05em 0 rgba(120, 50, 0, 0.25); }
+.line .w.em.in { animation: word-boing 0.55s cubic-bezier(0.2, 1.8, 0.4, 1); }
+@keyframes word-in { from { transform: translateY(0.35em) scale(0.4); opacity: 0; } }
+@keyframes word-boing {
+  0% { transform: scale(0.2) rotate(-12deg); opacity: 0; }
+  55% { transform: scale(1.3) rotate(6deg); opacity: 1; }
+  80% { transform: scale(0.94) rotate(-2deg); }
+}
+.speech.bump { animation: speech-bump 0.32s ease-out; }
+@keyframes speech-bump {
+  0%, 100% { transform: translate(-0.8em, -100%) scale(1); }
+  45% { transform: translate(-0.8em, -100%) scale(1.07, 0.95); }
+}
 .speech {
   left: 0;
   top: 0;

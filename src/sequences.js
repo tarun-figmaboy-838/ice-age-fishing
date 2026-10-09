@@ -109,7 +109,7 @@ async function correctCatch(game, fish) {
     game.collect(fish);
     game.cheer();
     audio.play('cheer');
-    await game.say(STORY.catch, 'popo', token);
+    await game.say(STORY.catch, token);
 
     state.phase = PHASE.CELEBRATING;
     audio.duck(2200);
@@ -417,10 +417,9 @@ async function opening(game) {
     state.fish = [];
     game.ui.setInstruction('', null);
     await clock.wait(800, token);
-    for (const line of STORY.intro) await game.say(line.text, line.who, token);
-    game.spawnChallengeFish();
-    for (const f of state.fish) f.alpha = 0;
-    await clock.tween(500, token, (t) => { for (const f of state.fish) f.alpha = t; });
+    for (const line of STORY.intro) await game.say(line, token);
+    game.fishIn();
+    await clock.wait(400, token);
     tutorial(game);
   } catch (e) {
     swallow(e);
@@ -480,8 +479,8 @@ async function discovery(game, nextIndex) {
     });
     await clock.wait(420, token);
     popo.beginMishap(wl);
-    audio.play('woah');
-    const woah = game.say(story.lines[0], 'popo', token);
+    const woah = (async () => { for (const line of story.woah) await game.say(line, token); })();
+    woah.catch(() => {});
     await arc;
     await clock.tween(900, token, (t) => {
       const k = ease.in(t);
@@ -493,7 +492,7 @@ async function discovery(game, nextIndex) {
     game.leaper = null;
     await woah;
     popo.endMishap();
-    for (const line of story.lines.slice(1)) await game.say(line, 'popo', token);
+    for (const line of story.after) await game.say(line, token);
     travelTo(game, nextIndex);
   } catch (e) {
     game.leaper = null;

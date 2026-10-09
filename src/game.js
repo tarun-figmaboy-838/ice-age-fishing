@@ -1,6 +1,6 @@
 (function (PopoGame) {
 'use strict';
-const { assets, preloadBackground, clock, Effects, WaterScene, surfaceWave, PAN_OVERLAP, spawnFish, LOCATIONS, matchesTarget, challengeFish, getShape, Popo, correctCatch, wrongCatch, travelTo, tutorial, opening, discovery, mouthOf, Cancelled, STAGE_W, STAGE_H, swimArea, raftAnchor, state, PHASE, resetProgress, newToken, isCurrent } = PopoGame;
+const { assets, preloadBackground, clock, Effects, WaterScene, surfaceWave, PAN_OVERLAP, spawnFish, refreshAmbient, LOCATIONS, matchesTarget, challengeFish, getShape, Popo, correctCatch, wrongCatch, travelTo, tutorial, opening, discovery, mouthOf, Cancelled, STAGE_W, STAGE_H, swimArea, raftAnchor, state, PHASE, resetProgress, newToken, isCurrent } = PopoGame;
 
 const HINT_DELAY = 4;
 
@@ -36,6 +36,10 @@ class Game {
     this.raftRippleIn = 1;
     this.dialogue = null;
     this.leaper = null;
+    this.ambient = [];
+    this.hop = null;
+    this.mark = null;
+    this.fishFade = 1;
     this.waterQuality = 1;
     this.frameAvg = 1 / 60;
     this.slowFor = 0;
@@ -100,6 +104,10 @@ class Game {
     state.paused = false;
     this.audio.resume();
     this.popo = new Popo();
+    this.ambient = [];
+    this.hop = null;
+    this.mark = null;
+    this.fishFade = 1;
     this.endLine();
     this.leaper = null;
     this.applyLocation();
@@ -152,6 +160,9 @@ class Game {
     state.target = ch.target;
     state.selectedFish = null;
     state.fish = spawnFish(challengeFish(ch), this.area, ch.fishScale || 1);
+    // fewer scenery fish when the challenge itself is busy
+    const ambientCount = Math.max(2, Math.min(4, 7 - state.fish.length));
+    this.ambient = refreshAmbient(this.ambient, ambientCount, this.area, (key) => matchesTarget(key, state.target));
     state.idleTime = 0;
     state.hintShown = false;
     this.ui.setInstruction(this.challengeText(), ch.target);
@@ -448,18 +459,23 @@ class Game {
     requestAnimationFrame((t) => this.loop(t));
   }
 
-  // Shows one story line, typing it out with little voice blips. Resolves once it has been
-  // on screen long enough to read, or straight away when the player taps to move on.
-  say(text, who, token) {
+  // Shows one story line word by word, with comic pauses after punctuation and a boing on
+  // *stressed* words. A line's cue fires when its word appears (or when a tap skips ahead).
+  // Resolves once the line has been on screen long enough to read.
+  say(line, token) {
     return new Promise((resolve, reject) => {
       if (this.dialogue) this.endLine();
+      const words = line.text.split(' ').map((raw) => ({ text: raw.replace(/\*/g, ''), em: raw.includes('*') }));
+      const narrator = line.who === 'narrator';
       this.dialogue = {
-        text, who, token, resolve, reject, shown: 0, held: 0,
-        hold: 650 + text.length * 32, speed: who === 'narrator' ? 30 : 36,
+        words, who: line.who, cue: line.cue, cueDone: false, token, resolve, reject,
+        next: 0, wait: 0, held: 0,
+        pace: narrator ? 0.21 : 0.17,
+        hold: (narrator ? 1000 : 700) + line.text.length * (narrator ? 26 : 22),
       };
-      this.ui.showLine(who, text);
+      this.ui.showLine(line.who, words);
       this.placeSpeech();
-      if (who === 'narrator') this.audio.play('narrate');
+      if (narrator) this.audio.play('narrate');
     });
   }
 
@@ -473,11 +489,28 @@ class Game {
     this.ui.hideLines();
   }
 
+  revealWord(d, quiet) {
+    const i = d.next;
+    const word = d.words[i];
+    this.ui.revealWord(i, word.em);
+    if (!quiet) this.audio.play(word.em ? 'boing' : d.who === 'popo' ? 'talk' : 'word');
+    if (d.cue && !d.cueDone && d.cue.word <= i) {
+      d.cueDone = true;
+      this.storyCue(d.cue.do);
+    }
+    d.next += 1;
+    const last = word.text.slice(-1);
+    d.wait += d.pace + (word.text.endsWith('…') ? 0.45 : '.!?'.includes(last) ? 0.3 : last === ',' ? 0.15 : 0) + (word.em ? 0.08 : 0);
+  }
+
   skipDialogue() {
     const d = this.dialogue;
     if (!d) return false;
-    if (d.shown < d.text.length) d.shown = d.text.length;
-    else d.held = d.hold;
+    if (d.next < d.words.length) {
+      while (d.next < d.words.length) this.revealWord(d, true);
+    } else {
+      d.held = d.hold;
+    }
     return true;
   }
 
@@ -489,12 +522,9 @@ class Game {
       d.reject(new Cancelled());
       return;
     }
-    if (d.shown < d.text.length) {
-      const before = Math.floor(d.shown);
-      d.shown = Math.min(d.text.length, d.shown + dt * d.speed);
-      const now = Math.floor(d.shown);
-      if (d.who === 'popo' && Math.floor(now / 3) > Math.floor(before / 3) && /\w/.test(d.text[now - 1] || '')) this.audio.play('talk');
-      this.ui.typeLine(d.text, now);
+    if (d.next < d.words.length) {
+      d.wait -= dt;
+      while (d.wait <= 0 && d.next < d.words.length) this.revealWord(d, false);
     } else {
       d.held += dt * 1000;
       if (d.held >= d.hold) {
@@ -504,6 +534,87 @@ class Game {
       }
     }
     if (d.who === 'popo') this.placeSpeech();
+  }
+
+  // Moments in the scene that a story line can trigger on one of its words.
+  storyCue(name) {
+    if (name === 'hop') {
+      this.hop = { t: 0 };
+      this.audio.play('boing');
+    } else if (name === 'exclaim') {
+      this.mark = { char: '!', t: 0, colour: '#ffd23f' };
+      this.audio.play('woah');
+    } else if (name === 'wonder') {
+      this.mark = { char: '?', t: 0, colour: '#7fd8ff' };
+      this.audio.play('hmm');
+    } else if (name === 'fishIn') {
+      this.fishIn();
+    }
+  }
+
+  // The challenge fish (and the scenery fish) fade in with a shimmer of bubbles and sparkles.
+  fishIn() {
+    if (state.fish.length) return;
+    this.spawnChallengeFish();
+    this.fishFade = 0;
+    for (const f of state.fish) f.alpha = 0;
+    for (const f of this.ambient) f.alpha = 0;
+    for (const f of state.fish) {
+      this.fx.puff(f.x, f.y, 0, 4, true);
+      this.fx.sparkle(f.x, f.y - f.h * 0.4, 6);
+    }
+    this.audio.play('cheer');
+  }
+
+  updateStoryFx(dt) {
+    if (this.fishFade < 1) {
+      this.fishFade = Math.min(1, this.fishFade + dt / 0.6);
+      for (const f of state.fish) f.alpha = this.fishFade;
+      for (const f of this.ambient) f.alpha = 0.72 * this.fishFade;
+    }
+    if (this.hop) {
+      // a happy hop: up out of the water, then a splash down
+      this.hop.t += dt;
+      const k = this.hop.t / 0.5;
+      if (k < 1) {
+        this.popo.dip = -18 * Math.sin(Math.PI * k);
+      } else {
+        this.popo.dip = 0;
+        this.hop = null;
+        const p = this.popo.placement('fishing', 'idle');
+        this.fx.splash((p.raftLeftX + p.raftRightX) / 2, this.waterline, false);
+        this.fx.ripple(p.raftRightX, this.waterline + 4, 0.8);
+        this.audio.play('splashSmall');
+      }
+    }
+    if (this.mark) {
+      this.mark.t += dt;
+      if (this.mark.t > 1.9) this.mark = null;
+    }
+  }
+
+  // A big comic "!" or "?" that pops above Popo's head and wobbles.
+  drawMark(ctx) {
+    const m = this.mark;
+    if (!m) return;
+    const p = this.popo;
+    const grow = m.t < 0.25 ? 1 + 2.2 * (m.t / 0.25 - 1) ** 3 + 1.2 * (m.t / 0.25 - 1) ** 2 : 1;
+    const alpha = m.t > 1.6 ? Math.max(0, 1 - (m.t - 1.6) / 0.3) : 1;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(p.anchor.x - 30, p.anchor.y - 268 + p.bob - Math.min(1, m.t / 0.25) * 12);
+    ctx.rotate(Math.sin(m.t * 12) * 0.16 * Math.exp(-m.t * 2.5));
+    ctx.scale(grow, grow);
+    ctx.font = '900 86px "Arial Rounded MT Bold", "Nunito", system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 10;
+    ctx.strokeStyle = '#2b1600';
+    ctx.strokeText(m.char, 0, 0);
+    ctx.fillStyle = m.colour;
+    ctx.fillText(m.char, 0, 0);
+    ctx.restore();
   }
 
   // The raft sits on the animated surface: it rises, falls and tilts with the waves under its
@@ -667,6 +778,7 @@ class Game {
     this.popo.waterResponse = this.fx.raftResponse(this.popo.anchor.x);
     this.rideWaves(dt);
     this.updateDialogue(dt);
+    this.updateStoryFx(dt);
     this.watchFrameRate(dt);
     for (const f of state.fish) {
       f.update(dt, this.area, state.fish);
@@ -681,6 +793,14 @@ class Game {
       }
       if (f.trail > 0 && Math.random() < dt * 14) {
         this.fx.puff(f.x - f.dir * f.w * 0.45, f.y + (Math.random() - 0.5) * f.h * 0.3, -f.dir * 0.4, 1);
+      }
+    }
+    if (this.ambient.some((f) => f.gone)) this.ambient = this.ambient.filter((f) => !f.gone);
+    for (const f of this.ambient) {
+      f.update(dt, this.area);
+      if (f.breath <= 0) {
+        f.breath = 2.5 + Math.random() * 3;
+        this.fx.puff(f.x + f.dir * f.w * 0.42, f.y + f.h * 0.1, f.dir, 1);
       }
     }
     if (this.popo.line.mode === 'attached' && state.selectedFish) {
@@ -877,10 +997,12 @@ class Game {
     }
     const offset = this.drawBackground(ctx);
     this.fx.drawWater(ctx, offset, state.fish);
+    for (const f of this.ambient) f.draw(ctx);
     for (const f of state.fish) f.draw(ctx);
     if (this.leaper) this.leaper.draw(ctx);
     this.popo.drawLine(ctx);
     this.popo.draw(ctx);
+    this.drawMark(ctx);
     this.drawRaftWater(ctx);
     this.fx.drawFront(ctx);
     if (this.titleFade > 0) this.drawTitle(ctx, this.titleFade);
