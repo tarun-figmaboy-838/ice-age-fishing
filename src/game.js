@@ -13,6 +13,7 @@ class Game {
     this.popo = new Popo();
     this.fx = new Effects();
     this.water = new WaterScene(document.getElementById('water'));
+    this.tutorialPending = false;
     this.waterline = LOCATIONS[0].waterline;
     this.area = swimArea(this.waterline);
     this.transition = null;
@@ -41,10 +42,10 @@ class Game {
     resetProgress();
     this.ui.hideStart();
     this.ui.showHud();
-    this.ui.setCollection(state.discovered);
     this.applyLocation();
     this.spawnChallengeFish();
     this.ui.setHitsEnabled(false);
+    this.tutorialPending = true;
     tutorial(this);
     this.showIdleScene();
   }
@@ -68,9 +69,9 @@ class Game {
     state.paused = false;
     this.audio.resume();
     this.popo = new Popo();
-    this.ui.setCollection(state.discovered);
     this.applyLocation();
     this.spawnChallengeFish();
+    this.tutorialPending = true;
     tutorial(this);
   }
 
@@ -95,7 +96,6 @@ class Game {
     const loc = LOCATIONS[state.locationIndex];
     this.setWaterline(loc.waterline);
     this.fx.setLocation(loc.background);
-    this.ui.setLocation(loc.name, state.challengeIndex, loc.challenges.length);
     if (state.locationIndex + 1 < LOCATIONS.length) preloadBackground(LOCATIONS[state.locationIndex + 1].background);
   }
 
@@ -124,7 +124,6 @@ class Game {
     state.hintShown = false;
     const name = getShape(ch.target).name.toLowerCase();
     this.ui.setInstruction(`Catch the ${name} fish!`, ch.target);
-    this.ui.setLocation(LOCATIONS[state.locationIndex].name, state.challengeIndex, LOCATIONS[state.locationIndex].challenges.length);
   }
 
   setupChallenge() {
@@ -156,8 +155,6 @@ class Game {
   collect(fish) {
     state.collected.push(fish.key);
     state.discovered.add(fish.shape.shape);
-    this.ui.setCollection(state.discovered);
-    this.ui.setLocation(LOCATIONS[state.locationIndex].name, state.challengeIndex + 1, LOCATIONS[state.locationIndex].challenges.length);
   }
 
   // --- input ----------------------------------------------------------------
@@ -188,6 +185,7 @@ class Game {
     this.instructionRevert = 0;
     this.ui.setInstruction(`Catch the ${getShape(state.target).name.toLowerCase()} fish!`, state.target);
     if (matchesTarget(fish.key, state.target)) {
+      this.tutorialPending = false;
       if (this.handFish) { this.ui.hideHand(); this.handFish = null; }
       correctCatch(this, fish);
     } else {
@@ -198,6 +196,12 @@ class Game {
   showHandOn(fish) {
     this.handFish = fish || null;
     if (fish) this.ui.showHand();
+  }
+
+  // The tutorial hand stays until the first correct tap, so it comes back after a wrong one.
+  restoreTutorialHand() {
+    if (!this.tutorialPending || state.phase !== PHASE.READY) return;
+    this.showHandOn(state.fish.find((f) => matchesTarget(f.key, state.target)));
   }
 
   togglePause() {

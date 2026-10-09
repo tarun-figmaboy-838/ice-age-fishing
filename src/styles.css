@@ -94,7 +94,7 @@ html, body {
 /* ---------- HUD ---------- */
 .hud { position: absolute; inset: 0; pointer-events: none; }
 .hud > * { pointer-events: none; }
-.hud button, .hud .pill, .hud .instruction { pointer-events: auto; }
+.hud button, .hud .instruction { pointer-events: auto; }
 
 .hud-top {
   position: absolute;
@@ -106,32 +106,9 @@ html, body {
   align-items: start;
   gap: 1em;
 }
+.instruction { grid-column: 2; }
+.hud-buttons { grid-column: 3; }
 .hud-buttons { display: flex; gap: 0.9em; justify-self: end; }
-
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 1em;
-  padding: 0.9em 1.6em;
-  border-radius: 999px;
-  background: var(--panel);
-  border: 0.18em solid var(--panel-border);
-  font-size: 2.1em;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-}
-.pill.location { justify-self: start; }
-.dots { display: inline-flex; gap: 0.35em; }
-.dots i {
-  width: 0.65em;
-  height: 0.65em;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.35);
-  box-shadow: inset 0 0 0 0.08em rgba(255, 255, 255, 0.4);
-}
-.dots i.done { background: var(--gold); box-shadow: 0 0 0.5em rgba(255, 209, 102, 0.8); }
 
 .instruction {
   display: inline-flex;
@@ -174,40 +151,6 @@ html, body {
 .icon-btn .mute { display: none; }
 .icon-btn.muted .wave { display: none; }
 .icon-btn.muted .mute { display: block; }
-
-.hud-bottom {
-  position: absolute;
-  left: 50%;
-  bottom: 1.4em;
-  transform: translateX(-50%);
-  display: flex;
-}
-.collection {
-  display: inline-flex;
-  align-items: center;
-  gap: 1.2em;
-  padding: 0.7em 1.6em;
-  border-radius: 999px;
-  background: var(--panel);
-  border: 0.18em solid var(--panel-border);
-  font-size: 1.9em;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-}
-.collection-label { white-space: nowrap; color: #ffe8bd; }
-.collection-label b { color: var(--gold); }
-.badges { display: inline-flex; gap: 0.35em; }
-.badge {
-  width: 1.9em;
-  height: 1.9em;
-  display: inline-grid;
-  place-items: center;
-  border-radius: 0.5em;
-  background: rgba(255, 255, 255, 0.12);
-  animation: badge-in 0.5s ease;
-}
-.badge svg { width: 80%; height: 80%; }
-@keyframes badge-in { from { transform: scale(0.3); opacity: 0; } 60% { transform: scale(1.15); } }
 
 /* ---------- overlays ---------- */
 .overlay {
@@ -268,8 +211,8 @@ html, body {
   box-shadow: none;
   padding: 0 1em 3em;
 }
-.hud.prize .hud-bottom, .hud.prize .instruction { opacity: 0; transition: opacity 0.3s ease; }
-.hud-bottom, .instruction { transition: opacity 0.3s ease; }
+.hud.prize .instruction { opacity: 0; }
+.instruction { transition: opacity 0.3s ease, transform 0.25s ease; }
 .hero-fish {
   position: relative;
   display: grid;
@@ -412,12 +355,8 @@ html, body {
 /* Narrow stages (phones, portrait): smaller HUD so the water stays visible, controls stay 44px. */
 @container (max-width: 720px) {
   .stage { font-size: 4.6px; }
-  .pill.location span:first-child { display: none; }
-  .pill { padding: 0.8em 1.2em; }
   .instruction { font-size: 2.4em; padding: 0.7em 1.4em 0.7em 1em; min-height: 2.4em; }
   .hud-top { gap: 0.6em; left: 1em; right: 1em; top: 1em; }
-  .collection { font-size: 1.8em; }
-  .hud-bottom { bottom: 0.8em; }
   .hand { width: 7em; height: 7em; }
   .title { font-size: 5.5em; }
   .btn.big { font-size: 3.2em; }

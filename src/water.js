@@ -98,10 +98,18 @@ void main() {
 class WaterScene {
   constructor(canvas) {
     this.canvas = canvas;
+    this.visible = null;
     const gl = this.canvas.getContext('webgl', { alpha: false, antialias: false, premultipliedAlpha: false });
     this.gl = gl;
     this.ok = Boolean(gl);
     if (!gl) return;
+    this.setup();
+    this.canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.ok = false; });
+    this.canvas.addEventListener('webglcontextrestored', () => { this.setup(); this.ok = true; });
+  }
+
+  setup() {
+    const gl = this.gl;
     this.program = this.link(VERTEX, FRAGMENT);
     gl.useProgram(this.program);
     const buf = gl.createBuffer();
@@ -119,7 +127,7 @@ class WaterScene {
     gl.uniform2f(this.u.uStage, STAGE_W, STAGE_H);
     gl.uniform1f(this.u.uSeabed, SEABED_Y);
     this.textures = new Map();
-    this.canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.ok = false; });
+    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
   }
 
   link(vs, fs) {
@@ -173,6 +181,8 @@ class WaterScene {
   }
 
   show(visible) {
+    if (visible === this.visible) return;
+    this.visible = visible;
     this.canvas.style.visibility = visible ? 'visible' : 'hidden';
   }
 

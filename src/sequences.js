@@ -311,6 +311,7 @@ async function wrongCatch(game, fish) {
     state.idleTime = 0;
     ui.setHitsEnabled(true);
     game.revertInstructionIn(3500);
+    game.restoreTutorialHand();
   } catch (e) {
     if (isCurrent(token)) {
       popo.endMishap();
@@ -320,6 +321,7 @@ async function wrongCatch(game, fish) {
       state.selectedFish = null;
       state.phase = PHASE.READY;
       ui.setHitsEnabled(true);
+      game.restoreTutorialHand();
     }
     swallow(e);
   }

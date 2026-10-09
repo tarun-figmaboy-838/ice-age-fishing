@@ -1,6 +1,6 @@
 (function (PopoGame) {
 'use strict';
-const { assets, SHAPES, learningLines, sideFact, TOTAL_SHAPES } = PopoGame;
+const { assets, SHAPES, learningLines, sideFact } = PopoGame;
 
 const $ = (id) => document.getElementById(id);
 
@@ -56,9 +56,8 @@ class UI {
   constructor() {
     this.el = {
       hud: $('hud'), hits: $('hits'), hand: $('hand'), start: $('screen-start'), loading: $('loading'), play: $('btn-play'),
-      locationName: $('location-name'), progress: $('location-progress'),
       instruction: $('instruction'), instructionIcon: $('instruction-icon'), instructionText: $('instruction-text'),
-      sound: $('btn-sound'), pause: $('btn-pause'), collectionCount: $('collection-count'), badges: $('collection-badges'),
+      sound: $('btn-sound'), pause: $('btn-pause'),
       reward: $('overlay-reward'), rewardFish: $('reward-fish'), rewardImg: $('reward-fish-img'), rewardName: $('reward-name'), rewardFact: $('reward-fact'),
       pauseOverlay: $('overlay-pause'), resume: $('btn-resume'), restart: $('btn-restart'),
       summary: $('overlay-summary'), summaryList: $('summary-list'), playAgain: $('btn-play-again'),
@@ -121,10 +120,6 @@ class UI {
     this.el.hud.hidden = false;
   }
 
-  setLocation(name, done, total) {
-    this.el.locationName.textContent = name;
-    this.el.progress.innerHTML = Array.from({ length: total }, (_, i) => `<i class="${i < done ? 'done' : ''}"></i>`).join('');
-  }
 
   setInstruction(text, shapeKey = null) {
     this.el.instructionText.textContent = text;
@@ -196,19 +191,6 @@ class UI {
   hideHand() { this.el.hand.hidden = true; }
   moveHand(x, y) {
     this.el.hand.style.transform = `translate(${(x * this.scale).toFixed(1)}px, ${(y * this.scale).toFixed(1)}px)`;
-  }
-
-  // --- collection -----------------------------------------------------------
-  setCollection(discovered) {
-    this.el.collectionCount.textContent = `${discovered.size} / ${TOTAL_SHAPES}`;
-    this.el.badges.innerHTML = '';
-    for (const shapeId of discovered) {
-      const b = document.createElement('span');
-      b.className = 'badge';
-      b.title = SHAPES[shapeId].name;
-      b.innerHTML = shapeSymbol(shapeId);
-      this.el.badges.appendChild(b);
-    }
   }
 
   // --- reward ---------------------------------------------------------------
