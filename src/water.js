@@ -17,6 +17,22 @@ void main() {
   gl_Position = vec4(aPos, 0.0, 1.0);
 }`;
 
+// The rolling surface waves, shared by the shader and surfaceWave() so the raft rides them.
+// [amplitude px, spatial frequency, speed]; the first is a long swell the raft visibly rides.
+const WAVES = [[4.2, 0.0042, 0.95], [3.9, 0.013, 1.25], [2.5, 0.029, -0.9], [1.3, 0.051, 2.0]];
+const WAVE_GLSL = WAVES.map(([a, k, s]) => `${a.toFixed(3)} * sin(p.x * ${k.toFixed(4)} + t * ${s.toFixed(3)})`).join(' + ');
+// During a row the two paintings pan rigidly together, overlapping by this much, with a soft
+// crossfade across the overlap. Both are sampled mirror-repeated, so nothing ever ends abruptly.
+const OVERLAP = 620;
+
+// Vertical displacement the shader applies to the surface band at x. The painting is sampled
+// at p + d, so the visible surface moves by -d.
+function surfaceWave(x, t) {
+  let d = 0;
+  for (const [a, k, s] of WAVES) d += a * Math.sin(x * k + t * s);
+  return d;
+}
+
 const FRAGMENT = `
 precision highp float;
 varying vec2 vUv;
@@ -31,39 +47,34 @@ uniform float uAmp;
 uniform float uSurface;
 uniform vec4 uPlants[8];
 
-float parallax(float y) {
-  float d = clamp(y / uStage.y, 0.0, 1.0);
-  return 1120.0 + 296.0 * d * d * (3.0 - 2.0 * d);
-}
-
 vec2 displace(vec2 p) {
   float t = uTime;
   vec2 d = vec2(0.0);
   // rolling waves across the painted surface band
   float s = uSurface * smoothstep(uWater - 75.0, uWater - 25.0, p.y) * (1.0 - smoothstep(uWater + 8.0, uWater + 40.0, p.y));
-  d.y += s * (2.6 * sin(p.x * 0.013 + t * 1.25) + 1.7 * sin(p.x * 0.029 - t * 0.9) + 0.9 * sin(p.x * 0.051 + t * 2.0));
-  d.x += s * (3.5 * sin(t * 0.33) + 1.4 * sin(p.x * 0.02 - t * 0.7));
+  d.y += s * (${WAVE_GLSL});
+  d.x += s * (4.5 * sin(t * 0.33) + 1.8 * sin(p.x * 0.02 - t * 0.7));
   // refraction below the surface, stronger with depth
   float u = smoothstep(uWater + 6.0, uWater + 150.0, p.y);
   float depth = clamp((p.y - uWater) / (uStage.y - uWater), 0.0, 1.0);
-  d.x += u * (1.8 + 2.6 * depth) * (0.6 * sin(p.y * 0.045 + t * 0.8) + 0.4 * sin(p.x * 0.012 + p.y * 0.03 - t * 0.55));
-  d.y += u * (0.9 + 1.6 * depth) * sin(p.x * 0.02 + p.y * 0.01 + t * 0.7);
+  d.x += u * (2.4 + 3.4 * depth) * (0.6 * sin(p.y * 0.045 + t * 0.8) + 0.4 * sin(p.x * 0.012 + p.y * 0.03 - t * 0.55));
+  d.y += u * (1.2 + 2.0 * depth) * sin(p.x * 0.02 + p.y * 0.01 + t * 0.7);
   // seaweed bends above its roots; rocks and sand around it stay put
   for (int i = 0; i < 8; i++) {
     vec4 pl = uPlants[i];
     if (pl.y <= pl.x) continue;
     float inside = smoothstep(pl.x - 6.0, pl.x + 10.0, p.x) * (1.0 - smoothstep(pl.y - 10.0, pl.y + 6.0, p.x));
     float h = clamp((pl.w - p.y) / max(1.0, pl.w - pl.z), 0.0, 1.0);
-    float bend = h * h * (6.0 * sin(t * 0.9 + pl.x * 0.013) + 2.2 * sin(t * 1.7 + p.y * 0.05 + pl.x));
+    float bend = h * h * (7.0 * sin(t * 0.9 + pl.x * 0.013) + 2.6 * sin(t * 1.7 + p.y * 0.05 + pl.x));
     d.x += inside * bend;
   }
   return d * uAmp;
 }
 
-vec4 scene(sampler2D tex, vec2 q) {
+vec3 painting(sampler2D tex, vec2 q) {
   vec2 uv = q / uStage;
-  float inside = step(0.0, uv.x) * step(uv.x, 1.0);
-  return vec4(texture2D(tex, clamp(uv, 0.0, 1.0)).rgb, inside);
+  uv.x = 1.0 - abs(1.0 - mod(uv.x, 2.0));
+  return texture2D(tex, clamp(uv, 0.0, 1.0)).rgb;
 }
 
 void main() {
@@ -71,28 +82,35 @@ void main() {
   vec2 q = p + displace(p);
   vec3 color;
   if (uMix <= 0.0) {
-    color = scene(uFrom, q).rgb;
+    color = painting(uFrom, q);
   } else {
-    float dist = parallax(p.y);
-    float oxFrom = -uMix * dist;
-    float oxTo = (1.0 - uMix) * dist;
-    vec4 from = scene(uFrom, q - vec2(oxFrom, 0.0));
-    vec4 to = scene(uTo, q - vec2(oxTo, 0.0));
-    float feather = (uStage.x - dist) * 0.9;
-    float blend = smoothstep(0.0, feather, q.x - oxTo) * min(1.0, uMix * 8.0);
-    blend = max(blend, 1.0 - from.a);
-    blend = max(blend, smoothstep(0.82, 1.0, uMix));
-    color = mix(from.rgb, to.rgb, blend * to.a);
+    float pan = uStage.x - ${OVERLAP.toFixed(1)};
+    float oxFrom = -uMix * pan;
+    float oxTo = oxFrom + pan;
+    vec3 from = painting(uFrom, q - vec2(oxFrom, 0.0));
+    vec3 to = painting(uTo, q - vec2(oxTo, 0.0));
+    float across = smoothstep(oxTo, oxTo + ${OVERLAP.toFixed(1)}, q.x);
+    float w = mix(across * smoothstep(0.0, 0.07, uMix), 1.0, smoothstep(0.93, 1.0, uMix));
+    color = mix(from, to, w);
   }
-  // light: moving caustics on the sand, a soft shimmer through the water, sparkle on the waves
+  // light: a caustic net on the sand (faint through the water), soft shafts from the surface,
+  // a slow shimmer, and glints on the wave crests
   float t = uTime;
-  float sand = smoothstep(uSeabed - 25.0, uSeabed + 35.0, p.y);
-  float caustic = sand * 0.08 * (sin(p.x * 0.021 + t * 0.9) * sin(p.y * 0.05 - t * 0.6) + 0.6 * sin(p.x * 0.033 - t * 0.5 + p.y * 0.02));
   float under = smoothstep(uWater + 6.0, uWater + 150.0, p.y);
-  float shimmer = under * 0.035 * sin(p.x * 0.006 + t * 0.4 + p.y * 0.004);
-  float s = uSurface * smoothstep(uWater - 60.0, uWater - 20.0, p.y) * (1.0 - smoothstep(uWater + 4.0, uWater + 30.0, p.y));
-  float sparkle = s * 0.07 * max(0.0, sin(p.x * 0.013 + t * 1.25)) * max(0.0, sin(p.x * 0.051 + t * 2.0));
-  color *= 1.0 + (caustic + shimmer + sparkle) * uAmp;
+  float depth = clamp((p.y - uWater) / (uStage.y - uWater), 0.0, 1.0);
+  vec2 cp = p * 0.016;
+  float n = sin(cp.x * 1.3 + t * 0.7 + sin(cp.y * 1.7 + t * 0.5) * 1.6) + sin(cp.y * 2.1 - t * 0.6 + sin(cp.x * 1.1 - t * 0.4) * 1.6);
+  float net = pow(max(0.0, 1.0 - abs(n) * 0.75), 5.0);
+  float sand = smoothstep(uSeabed - 25.0, uSeabed + 35.0, p.y);
+  float caustic = net * (sand * 0.24 + under * (1.0 - sand) * 0.05);
+  float rays = pow(max(0.0, sin(p.x * 0.010 + p.y * 0.0040 - t * 0.22)), 12.0)
+    + 0.7 * pow(max(0.0, sin(p.x * 0.0063 - p.y * 0.0026 + t * 0.17 + 1.7)), 14.0);
+  rays *= under * (1.0 - depth * 0.85) * 0.10;
+  float shimmer = under * 0.03 * sin(p.x * 0.006 + t * 0.4 + p.y * 0.004);
+  float ss = uSurface * smoothstep(uWater - 60.0, uWater - 20.0, p.y) * (1.0 - smoothstep(uWater + 4.0, uWater + 30.0, p.y));
+  float glint = max(0.0, sin(p.x * 0.013 + t * 1.25)) * max(0.0, sin(p.x * 0.051 + t * 2.0));
+  float sparkle = ss * 0.22 * glint * glint;
+  color = color * (1.0 + shimmer * uAmp) + vec3(0.75, 0.93, 1.0) * (caustic + rays + sparkle) * uAmp;
   gl_FragColor = vec4(color, 1.0);
 }`;
 
@@ -213,5 +231,5 @@ class WaterScene {
   }
 }
 
-Object.assign(PopoGame, { WaterScene });
+Object.assign(PopoGame, { WaterScene, surfaceWave, PAN_OVERLAP: OVERLAP });
 })(window.PopoGame = window.PopoGame || {});

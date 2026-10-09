@@ -11,6 +11,7 @@ Requires Pillow (pip install Pillow).
 import base64
 import importlib.util
 import json
+import math
 import os
 import sys
 from collections import deque
@@ -65,11 +66,13 @@ def is_rod(r, g, b, a):
 
 
 def is_raft_colour(r, g, b, a):
+    """Raft wood, rope and the dark gaps between logs. Strict enough that Popo's shaded cream
+    fur (warm, but much less saturated than the wood) never matches."""
     if a < 40:
         return False
-    wood = r >= 90 and r - b > 50 and 25 < g < 175
+    wood = r >= 90 and r - b > 75 and r - g > 45 and g < 175
     rope = r > 200 and g > 140 and b < 90
-    dark = max(r, g, b) < 110 and r - b > 25 and r >= 45
+    dark = max(r, g, b) < 110 and r - b > 40 and r - g > 20 and r >= 45
     return wood or rope or dark
 
 
@@ -87,7 +90,15 @@ def strip_raft(im, frames):
         thick = mask.filter(ImageFilter.MinFilter(STRIP_KERNEL)).filter(ImageFilter.MaxFilter(STRIP_KERNEL + 2)).load()
         bottom = f['raftBottom'] - y0
         right = f['raftRight'] - x0
-        zone = (0, bottom - 200, right + 6, bottom + 4)
+        # only the raft's own band (deck, logs, rope loops); the body and rod above it are left alone
+        zone = (0, bottom - 100, right + 6, bottom + 4)
+        axis = f.get('rodAxis')
+
+        def on_rod(x, y):
+            if not axis:
+                return False
+            ax, ay, ux, uy = axis
+            return abs((x + x0 - ax) * uy - (y + y0 - ay) * ux) < 12
         cleared = Image.new('L', (cell, cell), 0)
         cp = cleared.load()
         for y in range(max(0, zone[1]), min(cell, zone[3])):
@@ -106,8 +117,62 @@ def strip_raft(im, frames):
                 if a == 0:
                     continue
                 in_deck = y >= deck_top
-                dark = max(r, g, b) < 110 and r - b > 25 and r >= 45
-                if cp[x, y] or (mp[x, y] and grown[x, y]) or (in_deck and x < left_end) or (in_deck and dark):
+                dark = max(r, g, b) < 110 and r - b > 40 and r - g > 20 and r >= 45
+                if on_rod(x, y):
+                    continue
+                if cp[x, y] or (mp[x, y] and grown[x, y]) or (in_deck and x < left_end and mp[x, y]) or (in_deck and dark):
+                    px[x0 + x, y0 + y] = (0, 0, 0, 0)
+        strip_bucket(px, x0, y0, f['raftLeft'] - x0, bottom)
+
+
+def strip_bucket(px, x0, y0, raft_left, bottom):
+    """The shared raft prop has its own bucket, so each frame's painted bucket goes: its paint,
+    dark inside, rim highlights and metal handle. Popo's cream fur next to it stays."""
+    paint = [(x, y) for y in range(max(0, bottom - 170), bottom)
+             for x in range(max(0, raft_left - 10), raft_left + 210)
+             if (lambda r, g, b, a: a > 200 and r > 180 and 50 < g < 160 and b < 90 and r - g > 60)(*px[x0 + x, y0 + y])]
+    if not paint:
+        return
+    columns = sorted({x for x, _ in paint})
+    left = right = columns[0]
+    for x in columns[1:]:
+        if x - right > 10:
+            break
+        right = x
+    ys = [y for x, y in paint if left <= x <= right]
+    box = (left - 6, min(ys) - 32, right + 6, max(ys) + 4)
+    for y in range(max(0, box[1]), box[3]):
+        for x in range(max(0, box[0]), box[2]):
+            r, g, b, a = px[x0 + x, y0 + y]
+            if a == 0:
+                continue
+            painted = r > 110 and r - g > 45 and r - b > 70
+            inside = max(r, g, b) < 90
+            handle = max(r, g, b) - min(r, g, b) < 40 and b >= r - 6 and max(r, g, b) > 60
+            glint = min(r, g, b) > 185 and b >= r - 12
+            if painted or inside or handle or glint:
+                px[x0 + x, y0 + y] = (0, 0, 0, 0)
+    # whatever is left of the bucket as loose specks goes too
+    w, h = box[2] - box[0], box[3] - box[1]
+    seen = set()
+    for sy in range(max(0, box[1]), box[3]):
+        for sx in range(max(0, box[0]), box[2]):
+            if (sx, sy) in seen or px[x0 + sx, y0 + sy][3] == 0:
+                continue
+            part, q = [], deque([(sx, sy)])
+            seen.add((sx, sy))
+            while q:
+                x, y = q.popleft()
+                part.append((x, y))
+                for dx in (-1, 0, 1):
+                    for dy in (-1, 0, 1):
+                        nx, ny = x + dx, y + dy
+                        if (nx, ny) not in seen and box[0] <= nx < box[2] and max(0, box[1]) <= ny < box[3] and px[x0 + nx, y0 + ny][3] > 0:
+                            seen.add((nx, ny))
+                            q.append((nx, ny))
+            touches_edge = any(x in (box[0], box[2] - 1) or y in (max(0, box[1]), box[3] - 1) for x, y in part)
+            if len(part) < 80 and not touches_edge:
+                for x, y in part:
                     px[x0 + x, y0 + y] = (0, 0, 0, 0)
 
 
@@ -142,6 +207,17 @@ def erase_line_and_hook(im, frames):
                     if n >= 3:
                         extra.add((x, y))
         erased |= extra
+    # never bite into the character: a candidate surrounded mostly by colourful opaque pixels
+    # (fur, paws, rod) is shading or a reel, not the thin line, so it stays
+    body = Image.new('L', (w, h), 0)
+    bp = body.load()
+    for y in range(h):
+        for x in range(w):
+            r, g, bb, a = px[x, y]
+            if a > 100 and not is_grey(r, g, bb):
+                bp[x, y] = 255
+    density = body.filter(ImageFilter.BoxBlur(7)).load()
+    erased = {(x, y) for (x, y) in erased if density[x, y] < 120}
     # grey line pixels crossing the rod: repaint with the surrounding rod colour
     for y in range(4, h - 4):
         for x in range(4, w - 4):
@@ -232,7 +308,7 @@ def measure_frames(im, with_rod):
             frame = dict(row=row, col=col, cell=cell, cellX=x0, cellY=y0,
                          raftLeft=raft_left, raftRight=raft_right, raftBottom=raft_bottom, bodyArea=cream)
             if with_rod:
-                frame['rodTip'] = find_rod_tip(px, x0, y0, cell, raft_bottom)
+                frame['rodTip'], frame['rodAxis'] = find_rod_tip(px, x0, y0, cell, raft_bottom)
             frames.append(frame)
     return frames
 
@@ -271,7 +347,19 @@ def find_rod_tip(px, x0, y0, cell, raft_bottom):
         if len(comp) > len(best):
             best = comp
     tip = max(best, key=lambda p: (p[0] - body[0]) ** 2 + (p[1] - body[1]) ** 2)
-    return list(tip)
+    return list(tip), rod_axis(best)
+
+
+def rod_axis(points):
+    """Centre and unit direction of the rod (principal axis of its pixels)."""
+    n = len(points)
+    cx = sum(p[0] for p in points) / n
+    cy = sum(p[1] for p in points) / n
+    sxx = sum((p[0] - cx) ** 2 for p in points) / n
+    syy = sum((p[1] - cy) ** 2 for p in points) / n
+    sxy = sum((p[0] - cx) * (p[1] - cy) for p in points) / n
+    angle = 0.5 * math.atan2(2 * sxy, sxx - syy)
+    return [cx, cy, math.cos(angle), math.sin(angle)]
 
 
 def content_box(im, f):

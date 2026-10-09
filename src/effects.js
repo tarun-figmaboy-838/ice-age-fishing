@@ -375,22 +375,6 @@ class Effects {
     }
   }
 
-  drawSurface(ctx, raftX) {
-    ctx.save();
-    ctx.lineCap = 'round';
-    // Small highlights close to the raft, with separate periods and no full-width overlay.
-    for (let i = 0; i < 3; i++) {
-      const t = this.reduced ? 0 : this.t;
-      const phase = t * (0.37 + i * 0.053) + i * 2.1;
-      const x = raftX - 140 + i * 155 + Math.sin(phase) * 9;
-      ctx.strokeStyle = `rgba(225,250,255,${0.07 + 0.035 * Math.sin(phase)})`;
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.ellipse(x, this.waterline + 4 + this.raftResponse(x) * 0.6, 34 + Math.cos(phase) * 5, 3, 0, 0, Math.PI);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
 
   raftResponse(x) {
     if (this.reduced) return 0;
@@ -404,21 +388,6 @@ class Effects {
     return displacement;
   }
 
-  // Tint only the immersed raft contact, fading all the way to transparent.
-  // Popo's submerged body already has its own waterline clipping.
-  drawDepthVeil(ctx, popo) {
-    const p = popo.placement('fishing', 'idle');
-    const y = this.waterline;
-    const g = ctx.createLinearGradient(0, y, 0, y + 30);
-    g.addColorStop(0, 'rgba(55, 160, 220, 0.24)');
-    g.addColorStop(1, 'rgba(55, 160, 220, 0)');
-    ctx.save();
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.ellipse((p.raftLeftX + p.raftRightX) / 2, y, (p.raftRightX - p.raftLeftX) / 2 + 8, 26, 0, 0, Math.PI);
-    ctx.fill();
-    ctx.restore();
-  }
 
 }
 

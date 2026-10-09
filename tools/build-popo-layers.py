@@ -46,6 +46,13 @@ def build(cell):
     # Exposed deck texture, with original horizontal plank seams retained.
     deck = cell.crop((264, 301, 291, 344)).resize((153, 43))
     raft.alpha_composite(deck, (109, 301))
+    # The traced body outline leaves a sliver of fur beside the bucket; fur is never raft.
+    p = raft.load()
+    for y in range(240, 301):
+        for x in range(0, 140):
+            r, g, b, a = p[x, y]
+            if a and r > 170 and g > 140 and b > 110 and r - g < 60 and r - b > 10:
+                p[x, y] = (0, 0, 0, 0)
     # Remove residual line/hook islands, keeping the original bucket and raft.
     for layer in (raft, rod):
         p = layer.load()

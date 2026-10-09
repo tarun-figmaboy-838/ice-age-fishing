@@ -1,6 +1,6 @@
 (function (PopoGame) {
 'use strict';
-const { assets, preloadBackground, clock, Effects, WaterScene, spawnFish, LOCATIONS, matchesTarget, challengeFish, getShape, Popo, correctCatch, wrongCatch, travelTo, tutorial, mouthOf, STAGE_W, STAGE_H, swimArea, raftAnchor, state, PHASE, resetProgress, newToken, isCurrent } = PopoGame;
+const { assets, preloadBackground, clock, Effects, WaterScene, surfaceWave, PAN_OVERLAP, spawnFish, LOCATIONS, matchesTarget, challengeFish, getShape, Popo, correctCatch, wrongCatch, travelTo, tutorial, mouthOf, STAGE_W, STAGE_H, swimArea, raftAnchor, state, PHASE, resetProgress, newToken, isCurrent } = PopoGame;
 
 const HINT_DELAY = 4;
 
@@ -29,6 +29,8 @@ class Game {
     this.titleFish = [];
     this.titleFade = 0;
     this.titleSplashIn = 0.8;
+    this.raftRippleIn = 1;
+    this.surfaceColors = [];
     this.tutorialPending = false;
     this.waterline = LOCATIONS[0].waterline;
     this.area = swimArea(this.waterline);
@@ -149,6 +151,11 @@ class Game {
     const ch = this.currentChallenge();
     const name = getShape(ch.target).name.toLowerCase();
     return ch.all ? `Catch all the ${name} fish!` : `Catch the ${name} fish!`;
+  }
+
+  // A wrong catch keeps the instruction but names the fish that was tapped.
+  wrongText(fish) {
+    return `${this.challengeText().replace(/!$/, '')}, not the ${fish.shape.name.toLowerCase()} one!`;
   }
 
   remainingTargets() {
@@ -387,6 +394,112 @@ class Game {
     requestAnimationFrame((t) => this.loop(t));
   }
 
+  // The raft sits on the animated surface: it rises, falls and tilts with the waves under its
+  // two ends, and sends out a small ripple now and then.
+  rideWaves(dt) {
+    const popo = this.popo;
+    const p = popo.placement('fishing', 'idle');
+    const shift = popo.travelShift + popo.lean;
+    const left = p.raftLeftX + shift;
+    const right = p.raftRightX + shift;
+    if (this.water.ok) {
+      const amp = this.fx.reduced ? 0.35 : 1;
+      const t = this.fx.t;
+      const yl = -surfaceWave(left, t) * amp;
+      const yr = -surfaceWave(right, t) * amp;
+      const yc = -surfaceWave((left + right) / 2, t) * amp;
+      popo.waveY = (yl + yr + 2 * yc) / 4;
+      popo.waveAngle = Math.atan2(yr - yl, right - left) * 0.85;
+    } else {
+      popo.waveY = Math.sin(popo.bobT * 1.65) * 2.4 * (this.fx.reduced ? 0.2 : 1);
+      popo.waveAngle = 0;
+    }
+    this.raftRippleIn -= dt;
+    if (this.raftRippleIn <= 0 && state.phase !== PHASE.INTRO && !popo.mishap) {
+      this.raftRippleIn = 1.4 + Math.random() * 1.4;
+      this.fx.ripple(Math.random() < 0.5 ? left + 8 : right - 8, this.waterline + 4, 0.55);
+    }
+  }
+
+  // Average colour of the painted water just below the surface, for the water over the raft.
+  surfaceColor() {
+    const index = LOCATIONS[state.locationIndex].background;
+    if (this.surfaceColors[index]) return this.surfaceColors[index];
+    const img = assets.backgrounds[index];
+    if (!img) return null;
+    let colour = [40, 170, 240];
+    try {
+      const c = document.createElement('canvas');
+      c.width = 400;
+      c.height = 16;
+      const cx = c.getContext('2d');
+      cx.drawImage(img, 500, this.waterline + 8, 800, 32, 0, 0, 400, 16);
+      const d = cx.getImageData(0, 0, 400, 16).data;
+      const sum = [0, 0, 0];
+      for (let i = 0; i < d.length; i += 4) { sum[0] += d[i]; sum[1] += d[i + 1]; sum[2] += d[i + 2]; }
+      colour = sum.map((v) => Math.round(v / (d.length / 4)));
+    } catch (e) { /* a tainted canvas keeps the default colour */ }
+    this.surfaceColors[index] = colour;
+    return colour;
+  }
+
+  // Water lapping over the bottom of the raft, following the same waves, so the raft sits in
+  // the water rather than on top of it. Fades out at both ends into the painted surface.
+  drawRaftWater(ctx) {
+    const colour = this.surfaceColor();
+    if (!colour) return;
+    const popo = this.popo;
+    const p = popo.placement('fishing', 'idle');
+    const shift = popo.travelShift + popo.lean;
+    const x0 = Math.floor(p.raftLeftX + shift - 34);
+    const x1 = Math.ceil(p.raftRightX + shift + 34);
+    const top = Math.floor(this.waterline - 16);
+    const w = x1 - x0;
+    const h = 60;
+    const c = this.raftWaterCanvas || (this.raftWaterCanvas = document.createElement('canvas'));
+    if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+    const g = c.getContext('2d');
+    g.clearRect(0, 0, w, h);
+    const t = this.fx.t;
+    const amp = this.water.ok ? (this.fx.reduced ? 0.35 : 1) : 0;
+    const lap = this.fx.reduced ? 0.4 : 1.6;
+    const edge = (x) => this.waterline - surfaceWave(x, t) * amp + lap * Math.sin(x * 0.08 + t * 2.6) - top;
+    g.beginPath();
+    g.moveTo(0, h);
+    for (let x = 0; x <= w; x += 5) g.lineTo(x, edge(x0 + x));
+    g.lineTo(w, h);
+    g.closePath();
+    const [r, gr, b] = colour;
+    const fill = g.createLinearGradient(0, 10, 0, h);
+    fill.addColorStop(0, `rgba(${r}, ${gr}, ${b}, 0.88)`);
+    fill.addColorStop(0.45, `rgba(${r}, ${gr}, ${b}, 0.62)`);
+    fill.addColorStop(1, `rgba(${r}, ${gr}, ${b}, 0)`);
+    g.fillStyle = fill;
+    g.fill();
+    g.beginPath();
+    for (let x = 0; x <= w; x += 5) {
+      const y = edge(x0 + x);
+      if (x === 0) g.moveTo(x, y); else g.lineTo(x, y);
+    }
+    g.lineCap = 'round';
+    g.strokeStyle = 'rgba(255, 255, 255, 0.16)';
+    g.lineWidth = 7;
+    g.stroke();
+    g.strokeStyle = 'rgba(255, 255, 255, 0.72)';
+    g.lineWidth = 2.2;
+    g.stroke();
+    g.globalCompositeOperation = 'destination-in';
+    const ends = g.createLinearGradient(0, 0, w, 0);
+    ends.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    ends.addColorStop(0.13, 'rgba(0, 0, 0, 1)');
+    ends.addColorStop(0.87, 'rgba(0, 0, 0, 1)');
+    ends.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    g.fillStyle = ends;
+    g.fillRect(0, 0, w, h);
+    g.globalCompositeOperation = 'source-over';
+    ctx.drawImage(c, x0, top);
+  }
+
   // Fish, bubbles and splashes for the title banner. Also runs while it fades out after Play.
   updateTitle(dt) {
     this.titleFx.update(dt);
@@ -416,6 +529,7 @@ class Game {
     this.popo.update(dt);
     this.fx.update(dt);
     this.popo.waterResponse = this.fx.raftResponse(this.popo.anchor.x);
+    this.rideWaves(dt);
     for (const f of state.fish) {
       f.update(dt, this.area, state.fish);
       if (f.gone) continue;
@@ -479,48 +593,34 @@ class Game {
     c.height = STAGE_H;
     const cx = c.getContext('2d');
     cx.drawImage(img, 0, 0, STAGE_W, STAGE_H);
-    // the mask is built on its own canvas and applied once: a second destination-in fill
-    // would erase everything outside its own rectangle
-    const mask = document.createElement('canvas');
-    mask.width = STAGE_W;
-    mask.height = STAGE_H;
-    const m = mask.getContext('2d');
-    const g = m.createLinearGradient(0, 0, 256, 0);
-    g.addColorStop(0, 'rgba(0,0,0,0)');
-    g.addColorStop(1, 'rgba(0,0,0,1)');
-    m.fillStyle = g;
-    m.fillRect(0, 0, 256, STAGE_H);
-    m.fillStyle = '#000';
-    m.fillRect(256, 0, STAGE_W - 256, STAGE_H);
+    const mask = cx.createLinearGradient(0, 0, PAN_OVERLAP, 0);
+    mask.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    mask.addColorStop(1, 'rgba(0, 0, 0, 1)');
     cx.globalCompositeOperation = 'destination-in';
-    cx.drawImage(mask, 0, 0);
+    cx.fillStyle = mask;
+    cx.fillRect(0, 0, PAN_OVERLAP, STAGE_H);
+    cx.fillStyle = '#000';
+    cx.fillRect(PAN_OVERLAP, 0, STAGE_W - PAN_OVERLAP, STAGE_H);
     this.feathered = c;
     this.featheredSource = img;
     return c;
   }
 
   drawParallaxPlain(ctx, current, next, k) {
-    const feathered = this.featheredCopy(next);
-    const bands = [[0, 336, 1000], [336, 640, 1250], [640, STAGE_H, 1400]];
-    for (const [top, bottom, dist] of bands) {
-      const h = Math.min(STAGE_H, bottom + 3) - top;
-      const ox = -k * dist;
-      const nx = (1 - k) * dist;
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(0, top, STAGE_W, h);
-      ctx.clip();
-      ctx.drawImage(next, 0, top, STAGE_W, h, nx, top, STAGE_W, h);
-      ctx.drawImage(current, 0, top, STAGE_W, h, ox, top, STAGE_W, h);
-      ctx.globalAlpha = Math.min(1, k * 8);
-      ctx.drawImage(feathered, 0, top, STAGE_W, h, nx, top, STAGE_W, h);
-      if (k > 0.85) {
-        ctx.globalAlpha = (k - 0.85) / 0.15;
-        ctx.drawImage(next, 0, top, STAGE_W, h, nx, top, STAGE_W, h);
-      }
-      ctx.globalAlpha = 1;
-      ctx.restore();
-    }
+    const pan = STAGE_W - PAN_OVERLAP;
+    const ox = -k * pan;
+    ctx.drawImage(current, ox, 0, STAGE_W, STAGE_H);
+    ctx.save();
+    ctx.translate(ox + STAGE_W * 2, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(current, 0, 0, STAGE_W, STAGE_H);
+    ctx.restore();
+    const ease = (a, b, x) => { const v = Math.min(1, Math.max(0, (x - a) / (b - a))); return v * v * (3 - 2 * v); };
+    ctx.globalAlpha = ease(0, 0.07, k);
+    ctx.drawImage(this.featheredCopy(next), ox + pan, 0, STAGE_W, STAGE_H);
+    ctx.globalAlpha = ease(0.93, 1, k);
+    if (ctx.globalAlpha > 0) ctx.drawImage(next, 0, 0, STAGE_W, STAGE_H);
+    ctx.globalAlpha = 1;
   }
 
   drawTitle(ctx, alpha) {
@@ -587,8 +687,7 @@ class Game {
     for (const f of state.fish) f.draw(ctx);
     this.popo.drawLine(ctx);
     this.popo.draw(ctx);
-    this.fx.drawDepthVeil(ctx, this.popo);
-    this.fx.drawSurface(ctx, this.popo.anchor.x);
+    this.drawRaftWater(ctx);
     this.fx.drawFront(ctx);
     if (this.titleFade > 0) this.drawTitle(ctx, this.titleFade);
     this.ui.syncHits(state.fish);

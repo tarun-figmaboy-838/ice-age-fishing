@@ -58,6 +58,8 @@ class Popo {
     this.swayT = 0;
     this.mishap = null;
     this.waterResponse = 0;
+    this.waveY = 0;
+    this.waveAngle = 0;
     this.reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
@@ -66,11 +68,12 @@ class Popo {
     this.anchor.y = y;
   }
 
+  // fadeMs 0 is a hard cut, used inside an animation so frames never double-expose.
   setPose(sheet, frame, fadeMs = 120) {
     if (this.pose.sheet === sheet && this.pose.frame === frame) return;
-    this.prevPose = this.pose;
+    this.prevPose = fadeMs > 0 ? this.pose : null;
     this.pose = { sheet, frame };
-    this.fade = 0;
+    this.fade = fadeMs > 0 ? 0 : 1;
     this.fadeMs = Math.max(1, fadeMs);
   }
 
@@ -109,10 +112,10 @@ class Popo {
         a.t -= a.frameMs;
         if (a.index < a.frames.length - 1) {
           a.index += 1;
-          this.setPose(a.sheet, a.frames[a.index], 70);
+          this.setPose(a.sheet, a.frames[a.index], 0);
         } else if (a.loop) {
           a.index = 0;
-          this.setPose(a.sheet, a.frames[0], 70);
+          this.setPose(a.sheet, a.frames[0], 0);
         } else {
           this.anim = null;
         }
@@ -133,9 +136,9 @@ class Popo {
     }
   }
 
+  // waveY and waveAngle come from the animated water surface under the raft (see game.js).
   get bob() {
-    return (Math.sin(this.bobT * 1.65) * 1.9 + Math.sin(this.bobT * 1.07 + 0.8) * 0.65)
-      * (this.reduced ? 0.2 : 1) + this.dip + this.waterResponse;
+    return this.waveY + Math.sin(this.bobT * 1.07 + 0.8) * 0.6 * (this.reduced ? 0.2 : 1) + this.dip + this.waterResponse;
   }
 
   placement(sheet, name) {
@@ -165,7 +168,7 @@ class Popo {
   // Tilt pivots on the raft's right end at the waterline, so a lean looks like the raft dipping.
   pivot() {
     const p = this.placement(this.pose.sheet, this.pose.frame);
-    return { x: p.raftRightX, y: this.anchor.y, angle: this.tilt + (Math.sin(this.bobT * 1.13) * 0.0027 + Math.sin(this.bobT * 0.71 + 1.3) * 0.001) * (this.reduced ? 0.2 : 1) };
+    return { x: p.raftRightX, y: this.anchor.y, angle: this.tilt + this.waveAngle + Math.sin(this.bobT * 0.71 + 1.3) * 0.001 * (this.reduced ? 0.2 : 1) };
   }
 
   applyTransform(ctx) {

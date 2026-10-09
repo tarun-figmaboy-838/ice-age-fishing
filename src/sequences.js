@@ -131,7 +131,6 @@ async function wrongCatch(game, fish) {
   if (state.phase !== PHASE.READY) return;
   const token = newToken();
   const { popo, fx, audio, ui } = game;
-  const target = getShape(state.target);
   const home = { x: fish.x, y: fish.y };
   // Optional audio must never be able to abort the animation or retain its lock.
   const sound = (name) => { try { audio.play(name); } catch (e) { /* silent fallback */ } };
@@ -258,7 +257,7 @@ async function wrongCatch(game, fish) {
         sound('splashSmall');
       }
     });
-    ui.setInstruction(`That's a ${fish.shape.name.toLowerCase()}. Let's find the ${target.name.toLowerCase()}!`, state.target);
+    ui.setInstruction(game.wrongText(fish), state.target);
     // Keep the released hook visible on its slack line during the quick dip.
     const submergedY = game.waterline - (popo.bodyLandmark('top').y - m.y) + 22;
     await move(WRONG.dipIn, { y: submergedY, angle: 0 });
@@ -395,9 +394,8 @@ async function tutorial(game) {
     state.phase = PHASE.TUTORIAL;
     ui.setHitsEnabled(false);
     for (const f of state.fish) f.frozen = true;
-    ui.setInstruction('Help Popo find the shapes!', null);
-    await clock.wait(1900, token);
-    ui.setInstruction(`Tap the ${getShape(state.target).name.toLowerCase()} fish.`, state.target);
+    ui.setInstruction(game.challengeText(), state.target);
+    await clock.wait(900, token);
     game.showHandOn(state.fish.find((f) => f.key === state.target));
     await clock.wait(1500, token);
     for (const f of state.fish) f.frozen = false;
