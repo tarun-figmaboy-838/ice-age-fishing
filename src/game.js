@@ -128,6 +128,11 @@ class Game {
 
   setupChallenge() {
     this.spawnChallengeFish();
+    if (!this.currentChallenge().tutorial) {
+      this.tutorialPending = false;
+      this.showHandOn(null);
+      this.ui.hideHand();
+    }
     state.phase = PHASE.READY;
     this.ui.setHitsEnabled(true);
   }
