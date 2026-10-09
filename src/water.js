@@ -28,6 +28,7 @@ uniform float uWater;
 uniform float uSeabed;
 uniform float uMix;
 uniform float uAmp;
+uniform float uSurface;
 uniform vec4 uPlants[8];
 
 float parallax(float y) {
@@ -39,7 +40,7 @@ vec2 displace(vec2 p) {
   float t = uTime;
   vec2 d = vec2(0.0);
   // rolling waves across the painted surface band
-  float s = smoothstep(uWater - 75.0, uWater - 25.0, p.y) * (1.0 - smoothstep(uWater + 8.0, uWater + 40.0, p.y));
+  float s = uSurface * smoothstep(uWater - 75.0, uWater - 25.0, p.y) * (1.0 - smoothstep(uWater + 8.0, uWater + 40.0, p.y));
   d.y += s * (2.6 * sin(p.x * 0.013 + t * 1.25) + 1.7 * sin(p.x * 0.029 - t * 0.9) + 0.9 * sin(p.x * 0.051 + t * 2.0));
   d.x += s * (3.5 * sin(t * 0.33) + 1.4 * sin(p.x * 0.02 - t * 0.7));
   // refraction below the surface, stronger with depth
@@ -89,7 +90,7 @@ void main() {
   float caustic = sand * 0.08 * (sin(p.x * 0.021 + t * 0.9) * sin(p.y * 0.05 - t * 0.6) + 0.6 * sin(p.x * 0.033 - t * 0.5 + p.y * 0.02));
   float under = smoothstep(uWater + 6.0, uWater + 150.0, p.y);
   float shimmer = under * 0.035 * sin(p.x * 0.006 + t * 0.4 + p.y * 0.004);
-  float s = smoothstep(uWater - 60.0, uWater - 20.0, p.y) * (1.0 - smoothstep(uWater + 4.0, uWater + 30.0, p.y));
+  float s = uSurface * smoothstep(uWater - 60.0, uWater - 20.0, p.y) * (1.0 - smoothstep(uWater + 4.0, uWater + 30.0, p.y));
   float sparkle = s * 0.07 * max(0.0, sin(p.x * 0.013 + t * 1.25)) * max(0.0, sin(p.x * 0.051 + t * 2.0));
   color *= 1.0 + (caustic + shimmer + sparkle) * uAmp;
   gl_FragColor = vec4(color, 1.0);
@@ -119,7 +120,7 @@ class WaterScene {
     gl.enableVertexAttribArray(aPos);
     gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
     this.u = {};
-    for (const name of ['uFrom', 'uTo', 'uStage', 'uTime', 'uWater', 'uSeabed', 'uMix', 'uAmp', 'uPlants']) {
+    for (const name of ['uFrom', 'uTo', 'uStage', 'uTime', 'uWater', 'uSeabed', 'uMix', 'uAmp', 'uSurface', 'uPlants']) {
       this.u[name] = gl.getUniformLocation(this.program, name);
     }
     gl.uniform1i(this.u.uFrom, 0);
@@ -187,7 +188,8 @@ class WaterScene {
   }
 
   // from/to are background images; mix is the row progress (0 when not travelling).
-  render({ from, to, mix, time, waterline, plants, amplitude }) {
+  // surface 0 keeps the band around the waterline still (for art with things on the surface).
+  render({ from, to, mix, time, waterline, plants, amplitude, surface = 1, seabed = SEABED_Y }) {
     const gl = this.gl;
     const fromTex = this.texture(from);
     const toTex = fromTex && this.texture(to || from);
@@ -201,6 +203,8 @@ class WaterScene {
     gl.uniform1f(this.u.uWater, waterline);
     gl.uniform1f(this.u.uMix, mix);
     gl.uniform1f(this.u.uAmp, amplitude);
+    gl.uniform1f(this.u.uSurface, surface);
+    gl.uniform1f(this.u.uSeabed, seabed);
     const data = new Float32Array(32);
     plants.slice(0, 8).forEach((p, i) => data.set([p.left, p.right, p.top, p.root], i * 4));
     gl.uniform4fv(this.u.uPlants, data);

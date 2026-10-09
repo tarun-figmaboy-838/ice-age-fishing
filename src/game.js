@@ -4,6 +4,17 @@ const { assets, preloadBackground, clock, Effects, WaterScene, spawnFish, LOCATI
 
 const HINT_DELAY = 4;
 
+// The title banner: its water surface, sand line, the open water the decorative fish swim
+// in, where the hooked fish splashes, and sparkle points along the logo's snowy edges.
+const TITLE = {
+  waterline: 610,
+  seabed: 860,
+  area: { left: 60, right: 1612, top: 680, bottom: 905 },
+  fish: ['triangle', 'pentagon', 'hexagon', 'square', 'rhombus', 'circle'],
+  splash: { left: 790, right: 980, y: 588 },
+  twinkles: [[884, 118], [1092, 86], [1360, 62], [1598, 142], [1588, 300], [962, 334]],
+};
+
 
 class Game {
   constructor({ stage, ui, audio }) {
@@ -13,6 +24,11 @@ class Game {
     this.popo = new Popo();
     this.fx = new Effects();
     this.water = new WaterScene(document.getElementById('water'));
+    this.titleFx = new Effects();
+    this.titleFx.setWaterline(TITLE.waterline);
+    this.titleFish = [];
+    this.titleFade = 0;
+    this.titleSplashIn = 0.8;
     this.tutorialPending = false;
     this.waterline = LOCATIONS[0].waterline;
     this.area = swimArea(this.waterline);
@@ -28,6 +44,9 @@ class Game {
   // The world renders behind the start screen as soon as the art is ready.
   showIdleScene() {
     this.applyLocation();
+    if (state.phase === PHASE.INTRO && !this.titleFish.length) {
+      this.titleFish = spawnFish(TITLE.fish, TITLE.area, 0.85);
+    }
     if (!this.running) {
       this.running = true;
       this.lastFrame = performance.now();
@@ -36,6 +55,7 @@ class Game {
   }
 
   start() {
+    if (state.phase === PHASE.INTRO) this.titleFade = 1;
     this.audio.init();
     this.audio.resume();
     this.audio.startMusic();
@@ -226,7 +246,11 @@ class Game {
 
   // Tapping the water is just for fun: bubbles, a soft bloop, and curious fish come to look.
   onWaterTap(point) {
-    if (state.paused || state.phase === PHASE.INTRO || state.phase === PHASE.COMPLETE) return;
+    if (state.phase === PHASE.INTRO) {
+      this.onTitleTap(point);
+      return;
+    }
+    if (state.paused || state.phase === PHASE.COMPLETE) return;
     if (point.y < this.waterline) return;
     this.fx.puff(point.x, point.y, 0, 5, true);
     if (point.y < this.waterline + 40) this.fx.ripple(point.x, this.waterline, 0.6);
@@ -234,6 +258,17 @@ class Game {
     for (const f of state.fish) {
       if (f.gone || f === state.selectedFish) continue;
       if (Math.hypot(f.x - point.x, f.y - point.y) < 300) f.lookAt(point);
+    }
+  }
+
+  onTitleTap(point) {
+    if (point.y < TITLE.waterline) {
+      this.titleFx.sparkle(point.x, point.y, 8);
+      return;
+    }
+    this.titleFx.puff(point.x, point.y, 0, 5, true);
+    for (const f of this.titleFish) {
+      if (Math.hypot(f.x - point.x, f.y - point.y) < 320) f.lookAt(point);
     }
   }
 
@@ -352,7 +387,31 @@ class Game {
     requestAnimationFrame((t) => this.loop(t));
   }
 
+  // Fish, bubbles and splashes for the title banner. Also runs while it fades out after Play.
+  updateTitle(dt) {
+    this.titleFx.update(dt);
+    for (const f of this.titleFish) {
+      f.update(dt, TITLE.area, this.titleFish);
+      if (f.breath <= 0) {
+        f.breath = 1.4 + Math.random() * 2.4;
+        f.puffs += 1 + Math.floor(Math.random() * 3);
+      }
+      if (f.puffs > 0) {
+        this.titleFx.puff(f.x + f.dir * f.w * 0.42, f.y + f.h * 0.1, f.dir, f.puffs);
+        f.puffs = 0;
+      }
+    }
+    this.titleSplashIn -= dt;
+    if (this.titleSplashIn <= 0) {
+      this.titleSplashIn = 0.9 + Math.random() * 1.1;
+      const s = TITLE.splash;
+      this.titleFx.splash(s.left + Math.random() * (s.right - s.left), s.y, false);
+    }
+    if (state.phase !== PHASE.INTRO) this.titleFade = Math.max(0, this.titleFade - dt / 0.7);
+  }
+
   update(dt) {
+    if (state.phase === PHASE.INTRO || this.titleFade > 0) this.updateTitle(dt);
     clock.update(dt);
     this.popo.update(dt);
     this.fx.update(dt);
@@ -464,9 +523,65 @@ class Game {
     }
   }
 
+  drawTitle(ctx, alpha) {
+    const t = this.fx.t;
+    if (alpha >= 1) {
+      // the banner runs through the water pass, with the surface band kept still because the
+      // raft and the leaping fish sit on it; without WebGL it is drawn plainly
+      this.syncWaterCanvas();
+      const drawn = this.water.ok && this.water.render({
+        from: assets.title, to: null, mix: 0, time: this.titleFx.t, waterline: TITLE.waterline,
+        plants: [], amplitude: this.fx.reduced ? 0.35 : 1, surface: 0, seabed: TITLE.seabed,
+      });
+      this.water.show(Boolean(drawn));
+      if (!drawn) ctx.drawImage(assets.title, 0, 0, STAGE_W, STAGE_H);
+    } else {
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(assets.title, 0, 0, STAGE_W, STAGE_H);
+      ctx.globalAlpha = 1;
+    }
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    this.titleFx.drawWater(ctx, 0, this.titleFish);
+    ctx.restore();
+    for (const f of this.titleFish) {
+      f.alpha = alpha;
+      f.draw(ctx);
+    }
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    this.titleFx.drawFront(ctx);
+    // a warm, breathing sun glow in the corner and twinkles on the logo's snowy rim
+    ctx.globalCompositeOperation = 'screen';
+    const sun = ctx.createRadialGradient(1650, 18, 10, 1650, 18, 300);
+    sun.addColorStop(0, `rgba(255, 250, 220, ${(0.32 + Math.sin(t * 0.9) * 0.08) * alpha})`);
+    sun.addColorStop(1, 'rgba(255, 250, 220, 0)');
+    ctx.fillStyle = sun;
+    ctx.fillRect(1350, 0, STAGE_W - 1350, 320);
+    ctx.globalCompositeOperation = 'source-over';
+    TITLE.twinkles.forEach(([x, y], i) => {
+      const k = Math.max(0, Math.sin(t * 1.3 + i * 1.7)) ** 4;
+      if (k < 0.02) return;
+      const r = 4 + k * 9;
+      ctx.fillStyle = `rgba(255, 255, 255, ${k * alpha})`;
+      ctx.beginPath();
+      ctx.moveTo(x, y - r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.quadraticCurveTo(x, y, x, y + r);
+      ctx.quadraticCurveTo(x, y, x - r, y);
+      ctx.quadraticCurveTo(x, y, x, y - r);
+      ctx.fill();
+    });
+    ctx.restore();
+  }
+
   draw() {
     const ctx = this.stage.begin();
     ctx.clearRect(0, 0, STAGE_W, STAGE_H);
+    if (state.phase === PHASE.INTRO) {
+      this.drawTitle(ctx, 1);
+      return;
+    }
     const offset = this.drawBackground(ctx);
     this.fx.drawWater(ctx, offset, state.fish);
     for (const f of state.fish) f.draw(ctx);
@@ -475,6 +590,7 @@ class Game {
     this.fx.drawDepthVeil(ctx, this.popo);
     this.fx.drawSurface(ctx, this.popo.anchor.x);
     this.fx.drawFront(ctx);
+    if (this.titleFade > 0) this.drawTitle(ctx, this.titleFade);
     this.ui.syncHits(state.fish);
   }
 }

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#0b4fb8">
-  <title>Popo's Shape Fishing</title>
+  <title>Shape Fish Adventure</title>
   <link rel="stylesheet" href="src/styles.css">
 </head>
 <body>
@@ -69,11 +69,10 @@
         </div>
       </section>
 
-      <section id="screen-start" class="screen start" aria-label="Start">
-        <div class="start-card">
-          <h1 class="title"><span>Popo's</span> Shape Fishing</h1>
-          <p class="tagline">Help Popo catch the shape fish on his icy journey.</p>
-          <button id="btn-play" class="btn primary big" type="button">Play</button>
+      <section id="screen-start" class="screen start" aria-labelledby="game-title">
+        <h1 id="game-title" class="sr-only">Shape Fish Adventure</h1>
+        <div class="start-actions">
+          <button id="btn-play" class="btn primary big play-btn" type="button">Play</button>
           <p id="loading" class="loading" role="status">Loading…</p>
         </div>
       </section>

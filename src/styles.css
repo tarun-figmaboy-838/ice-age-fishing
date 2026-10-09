@@ -166,7 +166,7 @@ html, body {
 @keyframes fade-in { from { opacity: 0; } }
 @keyframes fade-out { to { opacity: 0; } }
 
-.card, .reward-card, .start-card {
+.card, .reward-card {
   text-align: center;
   padding: 3em 4em;
   border-radius: 3em;
@@ -333,9 +333,25 @@ html, body {
 }
 .screen.fade-out { opacity: 0; pointer-events: none; }
 .screen[hidden] { display: none; }
-.title { margin: 0 0 0.3em; font-size: 7em; line-height: 1; color: #fff; text-shadow: 0 0.08em 0 #b35b00, 0 0.5em 1.4em rgba(0, 0, 0, 0.5); }
-.title span { display: block; font-size: 0.5em; color: var(--gold); }
-.tagline { margin: 0 0 1.4em; font-size: 2.4em; color: #ffe8bd; }
+/* The banner (drawn on the canvas) is the title screen; only the Play button sits on top. */
+.screen.start { display: block; background: none; }
+.start-actions {
+  position: absolute;
+  left: 74%;
+  top: 41%;
+  transform: translateX(-50%);
+  text-align: center;
+}
+.play-btn { animation: play-pulse 1.6s ease-in-out infinite; }
+@keyframes play-pulse { 50% { transform: scale(1.07); } }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
 .loading { font-size: 2em; color: #ffe8bd; min-height: 1.4em; margin: 0.5em 0 0; }
 
 .rotate-hint {
@@ -358,12 +374,11 @@ html, body {
   .instruction { font-size: 2.4em; padding: 0.7em 1.4em 0.7em 1em; min-height: 2.4em; }
   .hud-top { gap: 0.6em; left: 1em; right: 1em; top: 1em; }
   .hand { width: 7em; height: 7em; }
-  .title { font-size: 5.5em; }
   .btn.big { font-size: 3.2em; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hand { animation: none; }
+  .hand, .play-btn { animation: none; }
   .hero-fish, .sparkles i, .hero-glow, .prize-burst { animation: none; }
   .scene { transition: none; }
 }
