@@ -258,7 +258,7 @@ async function wrongCatch(game, fish) {
         sound('splashSmall');
       }
     });
-    ui.setInstruction(game.wrongText(fish), state.target);
+    ui.setInstruction(game.wrongText(fish));
     // Keep the released hook visible on its slack line during the quick dip.
     const submergedY = game.waterline - (popo.bodyLandmark('top').y - m.y) + 22;
     await move(WRONG.dipIn, { y: submergedY, angle: 0 });
@@ -335,7 +335,7 @@ async function travelTo(game, nextIndex) {
   try {
     state.phase = PHASE.LEVEL_TRANSITION;
     ui.setHitsEnabled(false);
-    ui.setInstruction('Popo rows on…', null);
+    ui.setInstruction('Popo rows on…');
     audio.play('complete');
     for (const f of state.fish) { f.frozen = false; f.escape(); }
     await clock.wait(900, token);
@@ -395,7 +395,7 @@ async function tutorial(game) {
     state.phase = PHASE.TUTORIAL;
     ui.setHitsEnabled(false);
     for (const f of state.fish) f.frozen = true;
-    ui.setInstruction(game.challengeText(), state.target);
+    ui.setInstruction(game.challengeText());
     await clock.wait(900, token);
     game.showHandOn(state.fish.find((f) => f.key === state.target));
     await clock.wait(1500, token);
@@ -415,7 +415,7 @@ async function opening(game) {
     state.phase = PHASE.TUTORIAL;
     game.ui.setHitsEnabled(false);
     state.fish = [];
-    game.ui.setInstruction('', null);
+    game.ui.setInstruction('');
     await clock.wait(800, token);
     for (const line of STORY.intro) await game.say(line, token);
     game.fishIn();
@@ -435,7 +435,7 @@ async function discovery(game, nextIndex) {
   try {
     state.phase = PHASE.LEVEL_TRANSITION;
     ui.setHitsEnabled(false);
-    ui.setInstruction('', null);
+    ui.setInstruction('');
     for (const f of state.fish) { f.frozen = false; f.escape(); }
     await clock.wait(700, token);
     state.fish = [];

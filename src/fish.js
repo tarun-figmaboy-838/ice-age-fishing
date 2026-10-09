@@ -4,8 +4,6 @@ const { assets, getShape, STAGE_W } = PopoGame;
 
 const TAU = Math.PI * 2;
 const FISH_SCALE = 0.45;
-// Scenery fish are smaller still and a little faded, so they read as background life.
-const AMBIENT_SCALE = 0.62;
 
 class Fish {
   constructor(key, x, y, dir, sizeScale = 1) {
@@ -261,60 +259,120 @@ function spawnFish(keys, area, sizeScale = 1) {
   });
 }
 
-// A scenery fish: swims straight across at its own depth and pace, wraps around off-screen,
-// and is never tappable.
-class AmbientFish extends Fish {
-  constructor(key, area, dir, fromEdge = false) {
-    super(key, 0, 0, dir, AMBIENT_SCALE);
-    this.alpha = 0.72;
-    this.cruise = 28 + Math.random() * 44;
+// Background life in the gameplay water: soft, translucent fish shadows (never shapes, so
+// nothing in the background looks like an answer). They swim straight across at their own
+// depth and pace, wag their tails, wrap around off-screen and are never tappable.
+const SHADOW = { w: 128, h: 64, frames: 8 };
+let shadowSheet = null;
+
+function shadowPath(ctx, wag) {
+  const c = Math.cos(wag);
+  const s = Math.sin(wag);
+  const tail = (x, y) => [-34 + (x + 34) * c - y * s, (x + 34) * s + y * c];
+  ctx.beginPath();
+  ctx.moveTo(46, 0);
+  ctx.bezierCurveTo(40, -17, 8, -23, -18, -14);
+  ctx.bezierCurveTo(-28, -10, -34, -5, -36, 0);
+  ctx.bezierCurveTo(-34, 5, -28, 10, -18, 14);
+  ctx.bezierCurveTo(8, 23, 40, 17, 46, 0);
+  ctx.closePath();
+  const pts = [[-34, 0], [-58, -19], [-51, 0], [-58, 19]].map(([x, y]) => tail(x, y));
+  ctx.moveTo(...pts[0]);
+  for (const p of pts.slice(1)) ctx.lineTo(...p);
+  ctx.closePath();
+  ctx.moveTo(-4, -19);
+  ctx.quadraticCurveTo(6, -33, 18, -18);
+  ctx.closePath();
+}
+
+// Eight tail positions, drawn once. Each silhouette is drawn far off the canvas and only its
+// blurred shadow lands in the cell, which gives soft edges in every browser.
+function shadowSprites() {
+  if (shadowSheet) return shadowSheet;
+  const c = document.createElement('canvas');
+  c.width = SHADOW.w * SHADOW.frames;
+  c.height = SHADOW.h;
+  const ctx = c.getContext('2d');
+  for (let i = 0; i < SHADOW.frames; i += 1) {
+    ctx.save();
+    ctx.translate(i * SHADOW.w + SHADOW.w / 2 + 4 - 4000, SHADOW.h / 2);
+    ctx.shadowColor = 'rgb(6, 40, 96)';
+    ctx.shadowBlur = 5;
+    ctx.shadowOffsetX = 4000;
+    ctx.fillStyle = '#000';
+    shadowPath(ctx, Math.sin((i / SHADOW.frames) * TAU) * 0.3);
+    ctx.fill();
+    ctx.restore();
+  }
+  shadowSheet = c;
+  return c;
+}
+
+class ShadowFish {
+  constructor(area, dir, fromEdge = false) {
+    this.dir = dir;
+    this.depth = Math.random();
+    this.size = 0.5 + (1 - this.depth) * 0.6;
+    this.speed = (22 + Math.random() * 30) * (1.2 - this.depth * 0.5);
+    this.wag = Math.random() * SHADOW.frames;
+    this.phase = Math.random() * TAU;
+    this.fade = 1;
     this.leaving = false;
+    this.gone = false;
     this.place(area, !fromEdge);
   }
 
-  // Swim off and don't come back (used when a new challenge needs a different set).
-  leave() {
-    this.leaving = true;
-    this.cruise = Math.max(this.cruise, 90);
+  get w() {
+    return SHADOW.w * this.size;
   }
 
   place(area, anywhere) {
-    this.baseY = area.top + this.h / 2 + Math.random() * (area.bottom - area.top - this.h);
+    this.baseY = area.top + 30 + Math.random() * (area.bottom - area.top - 60);
     this.x = anywhere ? area.left + Math.random() * (area.right - area.left) : (this.dir > 0 ? -this.w : STAGE_W + this.w);
   }
 
+  leave() {
+    this.leaving = true;
+    this.speed = Math.max(this.speed, 80);
+  }
+
   update(dt, area) {
-    this.bobPhase += dt * 2.2;
-    this.driftPhase += dt * this.driftFreq * TAU;
-    this.breath -= dt;
-    this.x += this.dir * this.cruise * dt;
-    this.y = this.baseY + Math.sin(this.driftPhase) * this.driftAmp;
+    this.x += this.dir * this.speed * dt;
+    this.phase += dt * 0.9;
+    this.wag += dt * (5 + this.speed / 12);
+    this.y = this.baseY + Math.sin(this.phase) * 6;
     if ((this.dir > 0 && this.x > STAGE_W + this.w) || (this.dir < 0 && this.x < -this.w)) {
       if (this.leaving) {
         this.gone = true;
         return;
       }
-      this.cruise = 28 + Math.random() * 44;
       this.place(area, false);
     }
   }
+
+  draw(ctx) {
+    const sheet = shadowSprites();
+    const frame = Math.floor(this.wag) % SHADOW.frames;
+    ctx.save();
+    ctx.globalAlpha = (0.2 + (1 - this.depth) * 0.22) * this.fade;
+    ctx.translate(this.x, this.y + Math.sin(this.phase * 2.3) * 1.5);
+    ctx.scale(this.dir * this.size, this.size);
+    ctx.drawImage(sheet, frame * SHADOW.w, 0, SHADOW.w, SHADOW.h, -SHADOW.w / 2, -SHADOW.h / 2, SHADOW.w, SHADOW.h);
+    ctx.restore();
+  }
 }
 
-// Scenery fish never share a shape with the target, so nothing untappable looks like an answer.
-const AMBIENT_SHAPES = ['circle', 'oval', 'semicircle', 'triangle', 'square', 'rectangle', 'rhombus', 'parallelogram',
-  'trapezium', 'pentagon', 'hexagon', 'octagon', 'nonagon', 'decagon'];
-
-// Keeps the scenery fish that still fit the new target, sends the rest away, and brings
-// newcomers in from the edges, so the set changes without anything popping in or out.
-function refreshAmbient(current, count, area, isTarget) {
-  const staying = current.filter((f) => !f.leaving && !f.gone && !isTarget(f.key)).slice(0, count);
-  for (const f of current) if (!staying.includes(f) && !f.gone) f.leave();
-  const used = new Set(staying.map((f) => f.key));
-  const pool = AMBIENT_SHAPES.filter((key) => !isTarget(key) && !used.has(key)).sort(() => Math.random() - 0.5);
+// Keeps the shadows already swimming, sends any extra away and brings newcomers in from the
+// edges, so the set changes between levels without anything popping in or out.
+function refreshShadows(current, count, area) {
+  const live = current.filter((s) => !s.leaving && !s.gone);
+  const staying = live.slice(0, count);
+  for (const s of live.slice(count)) s.leave();
   const fresh = Array.from({ length: count - staying.length }, (_, i) =>
-    new AmbientFish(pool[i % pool.length], area, (staying.length + i) % 2 ? 1 : -1, current.length > 0));
-  return [...current.filter((f) => f.leaving && !f.gone), ...staying, ...fresh];
+    new ShadowFish(area, (staying.length + i) % 2 ? 1 : -1, current.length > 0));
+  // far shadows first, so nearer ones swim over them
+  return [...current.filter((s) => s.leaving && !s.gone), ...staying, ...fresh].sort((a, b) => b.depth - a.depth);
 }
 
-Object.assign(PopoGame, { FISH_SCALE, Fish, spawnFish, refreshAmbient });
+Object.assign(PopoGame, { FISH_SCALE, Fish, spawnFish, refreshShadows });
 })(window.PopoGame = window.PopoGame || {});

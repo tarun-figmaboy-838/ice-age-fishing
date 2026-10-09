@@ -1,6 +1,6 @@
 (function (PopoGame) {
 'use strict';
-const { assets, preloadBackground, clock, Effects, WaterScene, surfaceWave, PAN_OVERLAP, spawnFish, refreshAmbient, LOCATIONS, matchesTarget, challengeFish, getShape, Popo, correctCatch, wrongCatch, travelTo, tutorial, opening, discovery, mouthOf, Cancelled, STAGE_W, STAGE_H, swimArea, raftAnchor, state, PHASE, resetProgress, newToken, isCurrent } = PopoGame;
+const { assets, preloadBackground, clock, Effects, WaterScene, surfaceWave, PAN_OVERLAP, spawnFish, refreshShadows, LOCATIONS, matchesTarget, challengeFish, getShape, Popo, correctCatch, wrongCatch, travelTo, tutorial, opening, discovery, mouthOf, Cancelled, STAGE_W, STAGE_H, swimArea, raftAnchor, state, PHASE, resetProgress, newToken, isCurrent } = PopoGame;
 
 const HINT_DELAY = 4;
 
@@ -10,10 +10,14 @@ const TITLE = {
   waterline: 610,
   seabed: 860,
   area: { left: 60, right: 1612, top: 680, bottom: 905 },
-  fish: ['triangle', 'square', 'pentagon', 'hexagon', 'circle'],
-  // the play button floats in the middle of the banner's water; fish circle it
+  // the play button floats in the middle of the banner's water; five shape fish circle it,
+  // and a few more swim back and forth on the far left and right, clear of the orbit
   play: { x: 836, y: 772, r: 112 },
-  orbit: { rx: 270, ry: 92, speed: 0.55 },
+  orbit: { fish: ['triangle', 'square', 'pentagon', 'hexagon', 'circle'], rx: 270, ry: 92, speed: 0.55 },
+  sides: [
+    { fish: ['rhombus', 'oval'], area: { left: 60, right: 500, top: 690, bottom: 900 } },
+    { fish: ['rectangle', 'semicircle'], area: { left: 1172, right: 1612, top: 690, bottom: 900 } },
+  ],
   splash: { left: 790, right: 980, y: 588 },
   twinkles: [[884, 118], [1092, 86], [1360, 62], [1598, 142], [1588, 300], [962, 334]],
 };
@@ -60,8 +64,10 @@ class Game {
   showIdleScene() {
     this.applyLocation();
     if (state.phase === PHASE.INTRO && !this.titleFish.length) {
-      this.titleFish = spawnFish(TITLE.fish, TITLE.area, 0.62);
-      this.titleFish.forEach((f, i) => { f.orbit = (i / TITLE.fish.length) * Math.PI * 2; });
+      const orbit = spawnFish(TITLE.orbit.fish, TITLE.sides[0].area, 0.62);
+      orbit.forEach((f, i) => { f.orbit = (i / orbit.length) * Math.PI * 2; });
+      const sides = TITLE.sides.flatMap((side) => spawnFish(side.fish, side.area, 0.62).map((f) => Object.assign(f, { zone: side.area })));
+      this.titleFish = [...orbit, ...sides];
     }
     if (!this.running) {
       this.running = true;
@@ -160,24 +166,25 @@ class Game {
     state.target = ch.target;
     state.selectedFish = null;
     state.fish = spawnFish(challengeFish(ch), this.area, ch.fishScale || 1);
-    // fewer scenery fish when the challenge itself is busy
-    const ambientCount = Math.max(2, Math.min(4, 7 - state.fish.length));
-    this.ambient = refreshAmbient(this.ambient, ambientCount, this.area, (key) => matchesTarget(key, state.target));
+    // fewer background shadows when the challenge itself is busy
+    this.ambient = refreshShadows(this.ambient, Math.max(3, Math.min(5, 8 - state.fish.length)), this.area);
     state.idleTime = 0;
     state.hintShown = false;
-    this.ui.setInstruction(this.challengeText(), ch.target);
+    this.ui.setInstruction(this.challengeText());
   }
 
   challengeText() {
     const ch = this.currentChallenge();
     const name = getShape(ch.target).name.toLowerCase();
-    return ch.all ? `Catch all the ${name} fish!` : `Catch the ${name} fish!`;
+    return ch.all ? `Catch all the *${name}* fish!` : `Catch the *${name}* fish!`;
   }
+
 
   // A wrong catch keeps the instruction but names the fish that was tapped.
   wrongText(fish) {
     return `${this.challengeText().replace(/!$/, '')}, not the ${fish.shape.name.toLowerCase()} one!`;
   }
+
 
   remainingTargets() {
     return state.fish.filter((f) => !f.gone && matchesTarget(f.key, state.target));
@@ -189,7 +196,7 @@ class Game {
       state.selectedFish = null;
       state.idleTime = 0;
       state.hintShown = false;
-      this.ui.setInstruction(this.challengeText(), state.target);
+      this.ui.setInstruction(this.challengeText());
       state.phase = PHASE.READY;
       this.ui.setHitsEnabled(true);
       return;
@@ -225,7 +232,7 @@ class Game {
   complete() {
     state.phase = PHASE.COMPLETE;
     this.ui.setHitsEnabled(false);
-    this.ui.setInstruction('Great fishing, Popo!', null);
+    this.ui.setInstruction('Great fishing, Popo!');
     this.audio.play('complete');
     this.ui.showSummary([...state.discovered]);
   }
@@ -326,7 +333,10 @@ class Game {
       this.titleFx.puff(x + Math.cos(a) * r, y + Math.sin(a) * r * 0.8, Math.cos(a), 2, true);
     }
     this.titleFx.sparkle(x, y - r * 0.4, 14);
-    for (const f of this.titleFish) f.wiggle();
+    for (const f of this.titleFish) {
+      if (f.zone) f.startle({ x, y });
+      else f.wiggle();
+    }
     this.audio.play('splashSmall');
     this.audio.play('cheer');
     this.start();
@@ -340,7 +350,7 @@ class Game {
     this.clearHint();
     this.puffFrom(fish, 4, true);
     this.instructionRevert = 0;
-    this.ui.setInstruction(this.challengeText(), state.target);
+    this.ui.setInstruction(this.challengeText());
     if (matchesTarget(fish.key, state.target)) {
       this.tutorialPending = false;
       if (this.handFish) { this.ui.hideHand(); this.handFish = null; }
@@ -410,7 +420,7 @@ class Game {
     if (this.instructionRevert <= 0) return;
     this.instructionRevert -= dt * 1000;
     if (this.instructionRevert <= 0 && state.phase === PHASE.READY) {
-      this.ui.setInstruction(this.challengeText(), state.target);
+      this.ui.setInstruction(this.challengeText());
     }
   }
 
@@ -558,7 +568,7 @@ class Game {
     this.spawnChallengeFish();
     this.fishFade = 0;
     for (const f of state.fish) f.alpha = 0;
-    for (const f of this.ambient) f.alpha = 0;
+    for (const f of this.ambient) f.fade = 0;
     for (const f of state.fish) {
       this.fx.puff(f.x, f.y, 0, 4, true);
       this.fx.sparkle(f.x, f.y - f.h * 0.4, 6);
@@ -570,7 +580,7 @@ class Game {
     if (this.fishFade < 1) {
       this.fishFade = Math.min(1, this.fishFade + dt / 0.6);
       for (const f of state.fish) f.alpha = this.fishFade;
-      for (const f of this.ambient) f.alpha = 0.72 * this.fishFade;
+      for (const f of this.ambient) f.fade = this.fishFade;
     }
     if (this.hop) {
       // a happy hop: up out of the water, then a splash down
@@ -728,30 +738,34 @@ class Game {
     this.titleFx.update(dt);
     const pa = this.playAnim;
     const { x: px, y: py } = TITLE.play;
-    const { rx, ry, speed } = TITLE.orbit;
     pa.hover += (pa.hoverTarget - pa.hover) * Math.min(1, dt * 10);
     pa.press = Math.max(0, pa.press - dt * 4);
     if (pa.burst > 0) pa.burst += dt;
-    pa.angle += dt * speed * (1 + pa.burst * 4);
     pa.bubbleIn -= dt;
     if (pa.bubbleIn <= 0) {
       pa.bubbleIn = 0.28 + Math.random() * 0.3;
       this.titleFx.puff(px + (Math.random() - 0.5) * 150, py + 70, 0, 1);
     }
+    pa.angle += dt * TITLE.orbit.speed * (1 + pa.burst * 4);
+    const sideFish = this.titleFish.filter((f) => f.zone);
     for (const f of this.titleFish) {
-      // a 3D orbit: the far side runs behind the button, smaller and dimmer, and each fish
-      // turns edge-on at the sides instead of flipping
-      const a = pa.angle + f.orbit;
-      const spread = 1 + pa.burst * 2.4;
-      f.x = px + Math.cos(a) * rx * spread;
-      f.y = py + Math.sin(a) * ry * spread + Math.sin(a * 2 + f.orbit) * 8;
-      const facing = -Math.sin(a);
-      f.dir = Math.sign(facing || 1) * Math.max(0.12, Math.abs(facing));
-      f.scale = 0.82 + 0.26 * (Math.sin(a) + 1) / 2;
-      f.depth = Math.sin(a);
-      f.bobPhase += dt * 2.2;
-      f.breath -= dt;
-      if (f.wiggleT >= 0) { f.wiggleT += dt; if (f.wiggleT > 0.45) f.wiggleT = -1; }
+      if (f.zone) {
+        f.update(dt, f.zone, sideFish);
+      } else {
+        // a 3D orbit: the far side runs behind the button, smaller and dimmer, and each fish
+        // turns edge-on at the sides instead of flipping
+        const a = pa.angle + f.orbit;
+        const spread = 1 + pa.burst * 2.4;
+        f.x = px + Math.cos(a) * TITLE.orbit.rx * spread;
+        f.y = py + Math.sin(a) * TITLE.orbit.ry * spread + Math.sin(a * 2 + f.orbit) * 8;
+        const facing = -Math.sin(a);
+        f.dir = Math.sign(facing || 1) * Math.max(0.12, Math.abs(facing));
+        f.scale = 0.82 + 0.26 * (Math.sin(a) + 1) / 2;
+        f.depth = Math.sin(a);
+        f.bobPhase += dt * 2.2;
+        f.breath -= dt;
+        if (f.wiggleT >= 0) { f.wiggleT += dt; if (f.wiggleT > 0.45) f.wiggleT = -1; }
+      }
       if (f.breath <= 0) {
         f.breath = 1.4 + Math.random() * 2.4;
         f.puffs += 1 + Math.floor(Math.random() * 3);
@@ -796,13 +810,7 @@ class Game {
       }
     }
     if (this.ambient.some((f) => f.gone)) this.ambient = this.ambient.filter((f) => !f.gone);
-    for (const f of this.ambient) {
-      f.update(dt, this.area);
-      if (f.breath <= 0) {
-        f.breath = 2.5 + Math.random() * 3;
-        this.fx.puff(f.x + f.dir * f.w * 0.42, f.y + f.h * 0.1, f.dir, 1);
-      }
-    }
+    for (const f of this.ambient) f.update(dt, this.area);
     if (this.popo.line.mode === 'attached' && state.selectedFish) {
       const m = mouthOf(state.selectedFish);
       this.popo.line.hook.x = m.x;
@@ -950,14 +958,14 @@ class Game {
     ctx.globalAlpha = alpha;
     this.titleFx.drawWater(ctx, 0, this.titleFish);
     ctx.restore();
-    const fishBehind = this.titleFish.filter((f) => f.depth < 0);
-    const fishInFront = this.titleFish.filter((f) => f.depth >= 0);
-    for (const f of fishBehind) {
-      f.alpha = alpha * (0.72 + 0.28 * (1 + f.depth));
+    const behind = this.titleFish.filter((f) => f.zone || f.depth < 0);
+    const inFront = this.titleFish.filter((f) => !f.zone && f.depth >= 0);
+    for (const f of behind) {
+      f.alpha = alpha * (f.zone ? 1 : 0.72 + 0.28 * (1 + f.depth));
       f.draw(ctx);
     }
     this.drawPlayButton(ctx, alpha);
-    for (const f of fishInFront) {
+    for (const f of inFront) {
       f.alpha = alpha;
       f.draw(ctx);
     }

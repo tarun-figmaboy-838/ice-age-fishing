@@ -13,30 +13,6 @@ function polygonPoints(n, r, rotate) {
   return pts.join(' ');
 }
 
-// Plain geometric symbol for a shape key: this is the learning cue, so it carries no colour.
-function shapeSymbol(key) {
-  const s = SHAPES[key];
-  const style = 'fill="#fff" stroke="#f08a1d" stroke-width="3.5" stroke-linejoin="round"';
-  let body;
-  switch (key) {
-    case 'circle': body = `<circle cx="32" cy="32" r="24" ${style}/>`; break;
-    case 'oval': body = `<ellipse cx="32" cy="32" rx="28" ry="18" ${style}/>`; break;
-    case 'triangle': body = `<polygon points="32,8 57,54 7,54" ${style}/>`; break;
-    case 'square': body = `<rect x="11" y="11" width="42" height="42" ${style}/>`; break;
-    case 'rectangle': body = `<rect x="5" y="17" width="54" height="30" ${style}/>`; break;
-    case 'parallelogram': body = `<polygon points="19,16 61,16 45,48 3,48" ${style}/>`; break;
-    case 'trapezium': body = `<polygon points="19,16 45,16 60,48 4,48" ${style}/>`; break;
-    case 'rhombus': body = `<polygon points="32,12 58,32 32,52 6,32" ${style}/>`; break;
-    case 'quadrilateral': body = `<polygon points="10,16 50,8 58,44 18,56" ${style}/>`; break;
-    default: {
-      const n = s.sides;
-      const rotate = n % 2 === 1 ? -Math.PI / 2 : Math.PI / n - Math.PI / 2;
-      body = `<polygon points="${polygonPoints(n, 26, rotate)}" ${style}/>`;
-    }
-  }
-  return `<svg viewBox="0 0 64 64" width="100%" height="100%" aria-hidden="true">${body}</svg>`;
-}
-
 // Draws one fish from the atlas into a canvas element, so DOM icons stay crisp at any size.
 function fishCanvas(sprite, size) {
   const [x0, y0, x1, y1] = assets.fish.boxes[sprite];
@@ -56,7 +32,7 @@ class UI {
   constructor() {
     this.el = {
       hud: $('hud'), hits: $('hits'), hand: $('hand'), start: $('screen-start'), loading: $('loading'), play: $('btn-play'),
-      instruction: $('instruction'), instructionIcon: $('instruction-icon'), instructionText: $('instruction-text'),
+      instruction: $('instruction'), instructionText: $('instruction-text'),
       sound: $('btn-sound'), pause: $('btn-pause'),
       reward: $('overlay-reward'), rewardFish: $('reward-fish'), rewardImg: $('reward-fish-img'), rewardName: $('reward-name'), rewardFact: $('reward-fact'),
       pauseOverlay: $('overlay-pause'), resume: $('btn-resume'), restart: $('btn-restart'),
@@ -177,15 +153,33 @@ class UI {
   }
 
 
-  setInstruction(text, shapeKey = null) {
+  // *word* is highlighted (the shape to catch). The panel gives a little boing on every change.
+  setInstruction(text) {
+    const el = this.el.instructionText;
     this.el.instruction.classList.toggle('empty', !text);
-    this.el.instructionText.textContent = text;
-    this.el.instructionIcon.innerHTML = shapeKey ? shapeSymbol(shapeKey) : '';
-    this.el.instructionIcon.hidden = !shapeKey;
+    if (text === this.instructionShown) return;
+    this.instructionShown = text;
+    el.textContent = '';
+    text.split(/(\*[^*]+\*)/).forEach((part) => {
+      if (!part) return;
+      if (part.startsWith('*')) {
+        const b = document.createElement('b');
+        b.className = 'hl';
+        b.textContent = part.slice(1, -1);
+        el.appendChild(b);
+      } else {
+        el.appendChild(document.createTextNode(part));
+      }
+    });
+    if (!text) return;
+    this.el.instruction.classList.remove('say', 'pulse');
+    void this.el.instruction.offsetWidth;
+    this.el.instruction.classList.add('say');
   }
 
+
   pulseTarget() {
-    this.el.instruction.classList.remove('pulse');
+    this.el.instruction.classList.remove('pulse', 'say');
     void this.el.instruction.offsetWidth;
     this.el.instruction.classList.add('pulse');
   }
@@ -296,5 +290,5 @@ class UI {
   }
 }
 
-Object.assign(PopoGame, { shapeSymbol, UI });
+Object.assign(PopoGame, { UI });
 })(window.PopoGame = window.PopoGame || {});

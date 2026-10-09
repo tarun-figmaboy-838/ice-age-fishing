@@ -243,11 +243,11 @@ class Effects {
       b.life -= dt * b.decay;
       if (b.y <= this.waterline + 6) {
         const pop = this.pops.find((p) => p.life <= 0);
-        if (pop) Object.assign(pop, { x: b.x, y: this.waterline + 4, r: b.r, life: 1 });
+        if (pop) Object.assign(pop, { x: b.x, y: this.waterline + 5, r: b.r, life: 1, spin: rand(0, TAU) });
         b.life = 0;
       }
     }
-    for (const p of this.pops) if (p.life > 0) p.life -= dt * 4;
+    for (const p of this.pops) if (p.life > 0) p.life -= dt * 5;
   }
 
   drawLightWash(ctx, offsetX) {
@@ -331,12 +331,22 @@ class Effects {
     }
     for (const p of this.pops) {
       if (p.life <= 0) continue;
+      // a burst: a quick bright flick where the bubble was, and tiny droplets flying apart
       const k = 1 - p.life;
-      ctx.strokeStyle = `rgba(255, 255, 255, ${p.life * 0.8})`;
-      ctx.lineWidth = 1.3;
-      ctx.beginPath();
-      ctx.ellipse(p.x, p.y, p.r + k * 9, (p.r + k * 9) * 0.45, 0, 0, TAU);
-      ctx.stroke();
+      if (k < 0.35) {
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.8 * (1 - k / 0.35)})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * (1 - k * 1.6), 0, TAU);
+        ctx.fill();
+      }
+      ctx.fillStyle = `rgba(235, 250, 255, ${0.9 * p.life})`;
+      for (let i = 0; i < 5; i += 1) {
+        const a = p.spin + (i / 5) * TAU;
+        const d = p.r * 0.7 + k * (p.r * 1.5 + 7);
+        ctx.beginPath();
+        ctx.arc(p.x + Math.cos(a) * d, p.y + Math.sin(a) * d * 0.7 - k * 5, Math.max(0.6, p.r * 0.22 * (1 - k * 0.6)), 0, TAU);
+        ctx.fill();
+      }
     }
     for (const b of this.dipBubbles || []) {
       if (b.life <= 0) continue;
