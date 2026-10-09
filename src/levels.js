@@ -41,8 +41,6 @@ const SHAPES = {
   hexagon: { shape: 'hexagon', name: 'Hexagon', atlas: 10, sides: 6, categories: ['hexagon'] },
   heptagon: { shape: 'heptagon', name: 'Heptagon', atlas: 15, sides: 7, categories: ['heptagon'] },
   octagon: { shape: 'octagon', name: 'Octagon', atlas: 12, sides: 8, categories: ['octagon'] },
-  'octagon-tilted': { shape: 'octagon', name: 'Octagon', atlas: 11, sides: 8, categories: ['octagon'],
-    fact: 'Turned a little, it is still an octagon.' },
   nonagon: { shape: 'nonagon', name: 'Nonagon', atlas: 13, sides: 9, categories: ['nonagon'] },
   decagon: { shape: 'decagon', name: 'Decagon', atlas: 14, sides: 10, categories: ['decagon'] },
 };
@@ -75,20 +73,17 @@ const LOCATIONS = [
       { target: 'pentagon', others: ['square', 'hexagon'] },
       { target: 'hexagon', others: ['pentagon', 'triangle'] },
       { target: 'heptagon', others: ['hexagon', 'square'] },
-      { target: 'octagon', others: ['hexagon', 'circle'] },
     ],
   },
   {
     name: 'Aurora Waters', background: 3, waterline: 388,
     challenges: [
-      { target: 'octagon-tilted', others: ['hexagon', 'square-tilted'] },
+      { target: 'octagon', others: ['hexagon', 'square-tilted'] },
       { target: 'nonagon', others: ['pentagon', 'hexagon'] },
       { target: 'decagon', others: ['octagon', 'hexagon'] },
     ],
   },
 ];
-
-const TOTAL_SHAPES = new Set(Object.values(SHAPES).map((s) => s.shape)).size;
 
 function getShape(key) {
   return SHAPES[key];
@@ -107,5 +102,5 @@ function sideFact(shape) {
   return shape.fact || `${shape.sides} straight sides and ${shape.sides} corners.`;
 }
 
-Object.assign(PopoGame, { TERMS, SHAPES, LOCATIONS, TOTAL_SHAPES, getShape, matchesTarget, learningLines, sideFact });
+Object.assign(PopoGame, { TERMS, SHAPES, LOCATIONS, getShape, matchesTarget, learningLines, sideFact });
 })(window.PopoGame = window.PopoGame || {});

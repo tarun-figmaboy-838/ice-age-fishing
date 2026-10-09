@@ -308,9 +308,8 @@ def build_props(idle_cell):
     layers = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(layers)
     layers.build(idle_cell).save(os.path.join(OUT, 'sprites', 'popo-props.webp'), lossless=True)
-    for version in ('', '-v2'):
-        Image.open(os.path.join(SRC, f'popo-mishap-poses{version}.png')).save(
-            os.path.join(OUT, 'sprites', f'popo-mishap-poses{version}.webp'), quality=95, method=6)
+    Image.open(os.path.join(SRC, 'popo-mishap-poses-v2.png')).save(
+        os.path.join(OUT, 'sprites', 'popo-mishap-poses-v2.webp'), quality=95, method=6)
 
 
 def fish_parts(atlas, box):
