@@ -312,8 +312,30 @@ class Effects {
     ctx.restore();
   }
 
+  // Two halves of the same impact crown surround Popo at the measured contact.
+  drawSplashLayer(ctx, front) {
+    for (const r of this.reactions) {
+      if (r.life <= 0 || r.age > .48) continue;
+      const k = r.age / .48;
+      const width = 24 + k * 55;
+      const height = Math.sin(Math.PI * k) * 38 * r.strength;
+      ctx.save(); ctx.translate(r.x, this.waterline);
+      ctx.globalAlpha = (1-k) * (front ? .85 : .6);
+      ctx.fillStyle = front ? '#bceeff' : '#63d6f2';
+      ctx.beginPath();ctx.moveTo(-width, 2);
+      ctx.quadraticCurveTo(-width*.8,-height*.8,-width*.6,-height);
+      ctx.quadraticCurveTo(-width*.5,-height*.2,-width*.32,-height*.36);
+      ctx.quadraticCurveTo(0,front ? 8 : -height*.6,width*.32,-height*.36);
+      ctx.quadraticCurveTo(width*.5,-height*.2,width*.6,-height);
+      ctx.quadraticCurveTo(width*.8,-height*.8,width,2);
+      ctx.quadraticCurveTo(0,front ? 13 : -3,-width,2);
+      ctx.fill();ctx.restore();
+    }
+  }
+
   // Light playing just under the surface: soft sliding streaks and twinkles on the waterline.
   drawFront(ctx) {
+    this.drawSplashLayer(ctx, true);
     for (const b of this.mouthBubbles) {
       if (b.life <= 0 || b.delay > 0) continue;
       const a = Math.min(1, b.life * 3);

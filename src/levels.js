@@ -103,6 +103,7 @@ const STORY = {
     { who: 'narrator', text: 'And today…' },
     { who: 'narrator', text: 'he wants to catch *all* kinds of fish!', cue: { word: 4, do: 'fishIn' } },
   ],
+  wrong: { who: 'popo', text: 'Whoopsie Doopsie!' },
   catch: { who: 'popo', text: '*Great* catch!', cue: { word: 0, do: 'hop' } },
 };
 

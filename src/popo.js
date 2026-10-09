@@ -24,17 +24,8 @@ const SEAT = { dx: (178 - PROP.mid) * PROP.scale, dy: (373 - PROP.bottom) * PROP
 
 // Manually inspected pose extents, torso registrations and attachment landmarks.
 // One atlas-wide scale preserves the generated character's proportions in every pose.
-const MISHAP_SCALE = 0.445;
-const MISHAP_POSES = {
-  surprise: { box: [35, 0, 430, 440], pivot: [250, 344], hand: [353, 281], head: [285, 92], top: [240, 22], contact: [225, 427] },
-  brace: { box: [478, 10, 880, 439], pivot: [695, 344], hand: [802, 281], head: [763, 97], top: [717, 30], contact: [690, 426] },
-  slip: { box: [921, 0, 1368, 433], pivot: [1100, 300], hand: [1320, 219], head: [1235, 90], top: [1190, 13], contact: [1140, 409] },
-  surface: { box: [1433, 0, 1726, 448], pivot: [1570, 365], hand: [1655, 255], head: [1610, 76], top: [1575, 10], contact: [1530, 441] },
-  blink: { box: [105, 440, 402, 887], pivot: [250, 810], hand: [333, 694], head: [290, 523], top: [243, 451], contact: [215, 881] },
-  climb: { box: [464, 438, 930, 869], pivot: [765, 744], hand: [505, 594], head: [650, 521], top: [697, 449], contact: [800, 847] },
-  shake: { box: [950, 439, 1335, 878], pivot: [1140, 780], hand: [1220, 704], head: [1165, 520], top: [1100, 454], contact: [1160, 854] },
-  wet: { box: [1366, 450, 1763, 887], pivot: [1555, 791], hand: [1670, 727], head: [1620, 541], top: [1580, 460], contact: [1510, 869] },
-};
+const MISHAP_SCALE = 0.49;
+const { MISHAP_POSES } = PopoGame;
 
 function frameData(sheet, name) {
   const [row, col] = SHEETS[sheet].frames[name];
@@ -93,12 +84,8 @@ class Popo {
 
   update(dt) {
     if (this.mishap) {
+      this.bobT += dt * 1.1;
       this.swayT += dt * 1.6;
-      const m = this.mishap;
-      m.poseAge = Math.min(1, m.poseAge + dt / 0.12);
-      const settle = (1 - m.poseAge) ** 2;
-      m.poseShift.x = m.poseShiftFrom.x * settle;
-      m.poseShift.y = m.poseShiftFrom.y * settle;
       return;
     }
     this.bobT += dt * 1.1;
@@ -178,7 +165,7 @@ class Popo {
   }
 
   rodTip() {
-    if (this.mishap) return this.mishapRodPoint(357, 130);
+    if (this.mishap) return this.mishapRodPoint(1139, 70);
     const cur = this.placement(this.pose.sheet, this.pose.frame).tip;
     let tip = cur;
     if (this.fade < 1 && this.prevPose) {
@@ -219,119 +206,183 @@ class Popo {
     ctx.globalAlpha = 1;
   }
 
-  // Props retain their source registration; all generated poses share one physical scale.
+  // The idle body and rod are complementary masks of the ORIGINAL fishing frame.
+  // Both layers retain the original registration; the hidden handle is continued below.
+  prepareMishapArt() {
+    if (this.mishapArt) return;
+    const make = () => { const c = document.createElement('canvas'); c.width = 620; c.height = 435; return c; };
+    const body = make(), rod = make();
+    const g = body.getContext('2d');
+    g.drawImage(assets.sheets.fishing.img, 620, 0, 620, 435, 0, 0, 620, 435);
+    // The separator follows the rod's underside and the two gripping paws.
+    const outline = [[0,0],[335,0],[335,215],[310,230],[300,241],[302,252],[319,251],
+      [336,265],[340,280],[333,299],[313,315],[370,320],[400,435],[0,435]];
+    const mask = make(), mg = mask.getContext('2d');
+    mg.beginPath(); outline.forEach(([x,y],i) => i ? mg.lineTo(x,y) : mg.moveTo(x,y));
+    mg.closePath(); mg.fill();
+    g.globalCompositeOperation = 'destination-in'; g.drawImage(mask,0,0);
+    const r = rod.getContext('2d');
+    r.drawImage(assets.sheets.fishing.img,620,0,620,435,0,0,620,435);
+    r.globalCompositeOperation = 'destination-out'; r.drawImage(mask,0,0);
+    // Continue the short occluded handle behind the original gripping paws.
+    r.globalCompositeOperation = 'destination-over';
+    r.lineCap = 'round';r.beginPath();r.moveTo(283,338);r.lineTo(343,234);
+    r.strokeStyle='#77350e';r.lineWidth=16;r.stroke();
+    r.strokeStyle='#cf791a';r.lineWidth=11;r.stroke();
+    r.strokeStyle='#efad43';r.lineWidth=3;r.stroke();
+    this.mishapArt = { body, rod };
+  }
+
   beginMishap(waterline) {
+    this.prepareMishapArt();
     this.stopFrames();
     this.pose = { sheet: 'fishing', frame: 'idle' };
     this.prevPose = null;
     this.fade = 1;
     this.mishap = {
       x: 0, y: 0, angle: 0, raftAngle: 0, rodBend: 0,
-      waterline, bob: this.bob, rod: null, pose: 'surprise',
-      poseShift: { x: 0, y: 0 }, poseShiftFrom: { x: 0, y: 0 }, poseAge: 1,
+      waterline, bob: this.bob, rod: null, pose: 'idle', nextPose: 'idle', mix: 0,
+      time: 0, deckOcclusion: false, impactTime: null,
     };
   }
 
   sourcePoint(x, y) {
-    return { x: this.anchor.x + (x - 186) * 0.93,
-      y: this.anchor.y + (y - 383) * 0.93 + this.mishap.bob };
+    return { x: this.anchor.x + (x - 186) * .93,
+      y: this.anchor.y + (y - 383) * .93 + this.bob };
   }
 
   mishapBodyPoint(x, y) {
     const m = this.mishap;
     const pivot = this.sourcePoint(178, 300);
-    const dx = (x - 178) * 0.93, dy = (y - 300) * 0.93;
+    const dx = (x - 178) * .93, dy = (y - 300) * .93;
     return { x: pivot.x + m.x + dx * Math.cos(m.angle) - dy * Math.sin(m.angle),
       y: pivot.y + m.y + dx * Math.sin(m.angle) + dy * Math.cos(m.angle) };
   }
 
-  bodyLandmark(name) {
-    const m = this.mishap;
-    const f = MISHAP_POSES[m.pose];
-    const [x, y] = f[name];
-    const origin = this.mishapBodyPoint(178, 300);
-    const dx = (x - f.pivot[0]) * MISHAP_SCALE + m.poseShift.x;
-    const dy = (y - f.pivot[1]) * MISHAP_SCALE + m.poseShift.y;
-    return { x: origin.x + dx * Math.cos(m.angle) - dy * Math.sin(m.angle),
-      y: origin.y + dx * Math.sin(m.angle) + dy * Math.cos(m.angle) };
+  poseLocalPoint(pose, name) {
+    if (pose === 'idle') {
+      const points = { head: [888,172], top: [840,112], hand: [940,276],
+        contact: [955,400], pivot: [840,275] };
+      const [x,y] = points[name];
+      return { x: (x-840)*.63, y: (y-383)*.63 + 67.89 };
+    }
+    const f = MISHAP_POSES[pose];
+    return { x: (f[name][0] - f.head[0]) * MISHAP_SCALE + 30.24,
+      y: (f[name][1] - f.head[1]) * MISHAP_SCALE - 65.04 };
   }
 
-  setMishapPose(pose, align = null) {
+  bodyLandmark(name) {
     const m = this.mishap;
-    if (m.pose === pose) return;
-    const before = align ? this.bodyLandmark(align) : null;
-    m.pose = pose;
-    if (before) {
-      const after = this.bodyLandmark(align);
-      const dx = before.x - after.x, dy = before.y - after.y;
-      // Preserve the attachment on the switching frame, then settle its registration.
-      // This never crossfades bodies or changes the physical sprite scale.
-      m.poseShift.x += dx * Math.cos(m.angle) + dy * Math.sin(m.angle);
-      m.poseShift.y += -dx * Math.sin(m.angle) + dy * Math.cos(m.angle);
+    const a = this.poseLocalPoint(m.pose,name), b = this.poseLocalPoint(m.nextPose,name);
+    const x = a.x + (b.x-a.x)*m.mix, y = a.y + (b.y-a.y)*m.mix;
+    const origin = this.mishapBodyPoint(178,300);
+    return { x: origin.x + x*Math.cos(m.angle)-y*Math.sin(m.angle),
+      y: origin.y + x*Math.sin(m.angle)+y*Math.cos(m.angle) };
+  }
+
+  blendMishapPose(from, to, t) {
+    this.mishap.pose = from;
+    this.mishap.nextPose = to;
+    this.mishap.mix = t;
+  }
+
+  drawMishapPose(ctx, pose) {
+    if (pose === 'idle') {
+      ctx.drawImage(this.mishapArt.body, -220*.63, -383*.63+67.89, 620*.63,435*.63);
+    } else {
+      const f = MISHAP_POSES[pose];
+      const [x0,y0,x1,y1] = f.box;
+      ctx.drawImage(assets.mishapPoses,x0,y0,x1-x0,y1-y0,
+        (x0-f.head[0])*MISHAP_SCALE+30.24,(y0-f.head[1])*MISHAP_SCALE-65.04,
+        (x1-x0)*MISHAP_SCALE,(y1-y0)*MISHAP_SCALE);
     }
-    m.poseShiftFrom = { ...m.poseShift };
-    m.poseAge = 0;
   }
 
   drawMishapBody(ctx) {
     const m = this.mishap;
-    const f = MISHAP_POSES[m.pose];
-    const [x0, y0, x1, y1] = f.box;
-    const origin = this.bodyLandmark('pivot');
+    const origin = this.mishapBodyPoint(178,300);
     ctx.save();
-    ctx.translate(origin.x, origin.y);
-    ctx.rotate(m.angle);
-    ctx.drawImage(assets.mishapPoses, x0, y0, x1 - x0, y1 - y0,
-      (x0 - f.pivot[0]) * MISHAP_SCALE, (y0 - f.pivot[1]) * MISHAP_SCALE,
-      (x1 - x0) * MISHAP_SCALE, (y1 - y0) * MISHAP_SCALE);
+    ctx.translate(origin.x,origin.y); ctx.rotate(m.angle);
+    // Short registered pose blends preserve head position while the lower body
+    // settles. World translation and rotation are independent of the sprite atlas.
+    if (m.pose === m.nextPose || m.mix === 0 || m.mix === 1) {
+      this.drawMishapPose(ctx, m.mix === 1 ? m.nextPose : m.pose);
+    } else {
+      if (!this.poseBlend) {
+        this.poseBlend = document.createElement('canvas');
+        this.poseBlend.width = 360; this.poseBlend.height = 340;
+      }
+      const cacheKey = `${m.pose}:${m.nextPose}:${m.mix}`;
+      if (this.poseBlendKey !== cacheKey) {
+        this.poseBlendKey = cacheKey;
+        const g = this.poseBlend.getContext('2d');
+        g.clearRect(0,0,360,340);
+        if (!this.poseTextures) this.poseTextures = new Map();
+        const texture = pose => {
+          if (!this.poseTextures.has(pose)) {
+            const c = document.createElement('canvas'); c.width=360;c.height=340;
+            const cctx=c.getContext('2d');cctx.translate(180,190);this.drawMishapPose(cctx,pose);
+            this.poseTextures.set(pose,c);
+          }
+          return this.poseTextures.get(pose);
+        };
+        // Contiguous source/destination bands avoid antialiased clip seams. Head
+        // registration is invariant; only the lower body settles between drawn poses.
+        const bands = pose => [-190, -112, -65.04, -12,
+          Math.max(40, this.poseLocalPoint(pose,'contact').y), 150];
+        const a=bands(m.pose), b=bands(m.nextPose);
+        const target=a.map((y,i)=>y+(b[i]-y)*m.mix);
+        for (const [pose, points, opacity] of [[m.pose,a,1-m.mix],[m.nextPose,b,m.mix]]) {
+          g.save();g.globalCompositeOperation='lighter';g.globalAlpha=opacity;
+          const img=texture(pose);
+          for(let j=0;j<points.length-1;j++) {
+            g.drawImage(img,0,points[j]+190,360,points[j+1]-points[j],
+              0,target[j]+190,360,target[j+1]-target[j]);
+          }
+          g.restore();
+        }
+      }
+      ctx.drawImage(this.poseBlend,-180,-190);
+    }
     ctx.restore();
   }
 
   mishapRod() {
     const m = this.mishap;
-    return m.rod ? { ...m.rod, y: m.rod.y + this.waterResponse }
-      : { ...this.bodyLandmark('hand'), angle: m.angle + m.rodBend };
+    return m.rod || { ...this.bodyLandmark('hand'), angle: m.angle + m.rodBend };
   }
 
   mishapRodPoint(x, y) {
     const r = this.mishapRod();
-    const dx = (x - 229) * 0.93, dy = (y - 268) * 0.93;
-    return { x: r.x + dx * Math.cos(r.angle) - dy * Math.sin(r.angle),
-      y: r.y + dx * Math.sin(r.angle) + dy * Math.cos(r.angle) };
+    const dx = (x-940)*.63, dy = (y-276)*.63;
+    return { x:r.x+dx*Math.cos(r.angle)-dy*Math.sin(r.angle),
+      y:r.y+dx*Math.sin(r.angle)+dy*Math.cos(r.angle) };
   }
 
   drawMishapLayer(ctx, index, pivot, origin, angle) {
-    ctx.save();
-    ctx.translate(origin.x, origin.y);
-    ctx.rotate(angle);
-    ctx.drawImage(assets.props, index * 418, 0, 418, 418,
-      -pivot.x * 0.93, -pivot.y * 0.93, 418 * 0.93, 418 * 0.93);
+    ctx.save(); ctx.translate(origin.x,origin.y); ctx.rotate(angle);
+    ctx.drawImage(assets.props,index*418,0,418,418,-pivot.x*.93,-pivot.y*.93,418*.93,418*.93);
     ctx.restore();
   }
 
   drawMishap(ctx) {
     const m = this.mishap;
     const drawBody = () => this.drawMishapBody(ctx);
-    // Clip to the scene surface, not to a rectangular patch from a pose sheet.
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, m.waterline, PopoGame.STAGE_W, PopoGame.STAGE_H);
-    ctx.clip();
-    ctx.globalAlpha = 0.32;
-    ctx.filter = 'sepia(0.5) hue-rotate(145deg) saturate(1.5)';
-    drawBody();
-    ctx.restore();
-    const raft = this.sourcePoint(186, 383);
-    raft.y += this.waterResponse;
-    this.drawMishapLayer(ctx, 0, { x: 186, y: 383 }, raft, m.raftAngle);
+    ctx.save(); ctx.beginPath(); ctx.rect(0,m.waterline,PopoGame.STAGE_W,PopoGame.STAGE_H);ctx.clip();
+    ctx.globalAlpha=.43; ctx.filter='sepia(0.35) hue-rotate(145deg) saturate(1.3)';
+    drawBody();ctx.restore();
+    const raft = this.sourcePoint(186,383);
+    this.drawMishapLayer(ctx,0,{x:186,y:383},raft,m.raftAngle);
     const rod = this.mishapRod();
-    this.drawMishapLayer(ctx, 1, { x: 229, y: 268 }, rod, rod.angle);
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, 0, PopoGame.STAGE_W, m.waterline);
-    ctx.clip();
-    drawBody();
-    ctx.restore();
+    ctx.save();ctx.translate(rod.x,rod.y);ctx.rotate(rod.angle);
+    ctx.drawImage(this.mishapArt.rod,-320*.63,-276*.63,620*.63,435*.63);ctx.restore();
+    ctx.save();ctx.beginPath();ctx.rect(0,0,PopoGame.STAGE_W,m.waterline);ctx.clip();
+    drawBody();ctx.restore();
+    // Only the existing front rail occludes the climbing belly/feet. The paws stay above it.
+    if (m.deckOcclusion) {
+      ctx.save();ctx.beginPath();ctx.rect(0,this.anchor.y-18+this.bob,PopoGame.STAGE_W,40);ctx.clip();
+      this.drawMishapLayer(ctx,0,{x:186,y:383},raft,m.raftAngle);ctx.restore();
+    }
   }
 
   endMishap() {

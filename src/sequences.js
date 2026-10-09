@@ -44,18 +44,6 @@ async function castTo(game, fish, token) {
   popo.line.tension = 1;
 }
 
-function reelLineHome(game, token) {
-  const { popo } = game;
-  const start = { ...popo.line.hook };
-  popo.line.mode = 'slack';
-  return clock.tween(380, token, (t) => {
-    const tip = popo.rodTip();
-    const k = ease.inOut(t);
-    popo.line.hook.x = start.x + (tip.x + 4 - start.x) * k;
-    popo.line.hook.y = start.y + (tip.y + popo.line.length - start.y) * k;
-    popo.line.arc = 0.6 * (1 - k);
-  }).then(() => { popo.line.mode = 'dangle'; popo.line.arc = 0; popo.line.tension = 0; });
-}
 
 async function correctCatch(game, fish) {
   const token = newToken();
@@ -124,207 +112,182 @@ async function correctCatch(game, fish) {
   }
 }
 
-// Durations use game time, so pause freezes the whole mishap, including its effects.
-const WRONG = { acknowledge: 160, tug: 220, yank: 230, slack: 240, brace: 320, doubleTake: 140, hang: 100, fall: 380,
-  dipIn: 160, dip: 300, emerge: 340, blink: 100, reach: 240, climb: 420, seat: 260, wet: 300, grip: 260, smile: 160 };
-
+// A single game-clock tween owns the complete reaction. No frame-count damping or
+// chained waits: dropped frames still cross every event once, in chronological order.
+const WRONG_DURATION = 4800;
 async function wrongCatch(game, fish) {
-  if (state.phase !== PHASE.READY) return;
+  if (state.phase !== PHASE.READY || game.popo.mishap) return;
   const token = newToken();
   const { popo, fx, audio, ui } = game;
   const home = { x: fish.x, y: fish.y };
-  // Optional audio must never be able to abort the animation or retain its lock.
-  const sound = (name) => { try { audio.play(name); } catch (e) { /* silent fallback */ } };
-  const castGame = Object.create(game);
-  castGame.audio = { play: sound };
-  const move = (duration, values, easing = ease.inOut) => {
-    const m = popo.mishap;
-    const start = Object.fromEntries(Object.keys(values).map((key) => [key, m[key]]));
-    return clock.tween(duration, token, (t) => {
-      const k = easing(t);
-      for (const key of Object.keys(values)) m[key] = start[key] + (values[key] - start[key]) * k;
-    });
+  const sound = name => { try { audio.play(name); } catch (e) { /* optional audio */ } };
+  const restore = () => {
+    popo.endMishap();
+    fish.frozen = false;
+    state.selectedFish = null;
+    state.idleTime = 0;
+    state.phase = PHASE.READY;
+    ui.setHitsEnabled(true);
+    game.restoreTutorialHand();
   };
   try {
     state.phase = PHASE.CASTING;
     state.selectedFish = fish;
+    game.instructionRevert = 0;
     ui.setHitsEnabled(false);
     game.showHandOn(null);
     ui.hideHand();
     fish.frozen = true;
     fish.wiggle(true);
     sound('fishTap');
-    await clock.wait(WRONG.acknowledge, token);
+    const castGame = Object.create(game);
+    castGame.audio = { play: sound };
     await castTo(castGame, fish, token);
-
-    // castTo resolves on contact with the frozen fish's actual mouth.
-    state.phase = PHASE.WRONG_PULL;
     popo.beginMishap(game.waterline);
     const m = popo.mishap;
-    const reduced = fx.reduced;
-    const rotation = reduced ? 0.45 : 1;
+    const pull = Math.min(38, game.area.right - fish.w / 2 - home.x);
     const edge = popo.placement('fishing', 'idle').raftRightX;
-    const seat = popo.mishapBodyPoint(178, 300);
-    const fallX = edge - seat.x + (reduced ? 45 : 65);
-    const pull = Math.min(reduced ? 16 : 30, Math.max(8, game.area.right - fish.w / 2 - fish.x));
-    sound('tug');
-    await clock.tween(WRONG.tug, token, (t) => {
-      const k = ease.out(t);
-      fish.x = home.x + pull * k;
-      m.x = 9 * k;
-      m.angle = 0.045 * k * rotation;
-      m.rodBend = 0.035 * k;
-      popo.line.tension = 1.4;
-    });
-    // tug-of-war: three pulls, each harder. The fish dives away and Popo leans after it;
-    // between pulls the line slackens and both ease back, ending on the values the next
-    // beat starts from so nothing snaps.
-    for (let i = 1; i <= 3; i += 1) {
-      const strength = i / 3;
-      const last = i === 3;
-      const dartX = home.x + pull + 22 * i;
-      const backX = last ? home.x + pull : home.x + pull + 10 * i;
-      const slide = 9 + 5 * i;
-      sound('tug');
-      fish.wiggle();
-      await clock.tween(WRONG.yank, token, (t) => {
-        const k = ease.inOut(t);
-        fish.x = home.x + pull + (dartX - home.x - pull) * k;
-        fish.y = home.y + 6 * strength * Math.sin(k * Math.PI / 2);
-        m.x = 9 + (slide - 9) * k;
-        m.y = -4 * strength * Math.sin(k * Math.PI);
-        m.angle = (0.045 + 0.065 * strength * k) * rotation;
-        m.rodBend = 0.035 + 0.045 * strength * k;
-        m.raftAngle = reduced ? 0 : 0.01 * strength * k;
-        popo.line.tension = 1.5 + strength;
-      });
-      await clock.tween(WRONG.slack, token, (t) => {
-        const k = ease.inOut(t);
-        const relax = last ? 1 : 0.5;
-        fish.x = dartX + (backX - dartX) * k;
-        fish.y = home.y + 6 * strength * (1 - k);
-        m.x = slide + (9 - slide) * k * relax;
-        m.angle = (0.045 + 0.065 * strength * (1 - k * relax)) * rotation;
-        m.raftAngle *= 1 - 0.6 * k;
-        popo.line.tension = 1.2;
-      });
+    const origin = popo.mishapBodyPoint(178, 300);
+    const landingX = edge + 76 - origin.x;
+    const rotation = fx.reduced ? 0.55 : 1;
+    const nodes = [
+      // Time, lateral offset, vertical offset, body rotation, acting pose.
+      [0, 0, 0, 0, 'idle'],
+      [180, 4, 0, .025, 'surprise'],
+      [400, 13, -2, .05, 'surprise'],
+      [680, 25, -5, -.055, 'brace'],
+      [950, landingX * .47, -12, .13, 'brace'],
+      [1130, landingX * .70, -30, .20, 'slip'],
+      [1450, landingX, 22, .30, 'slip'],
+      [1750, landingX + 6, 190, .06, 'surface'],
+      [2050, landingX + 3, 191, 0, 'surface'],
+      [2430, landingX, 63, -.025, 'surface'],
+      [2600, landingX - 5, 69, 0, 'blink'],
+      [2750, landingX - 12, 68, 0, 'surface'],
+      [3030, landingX - 29, 56, -.03, 'climb'],
+      [3460, landingX - 70, -9, -.12, 'climb'],
+      [3790, landingX * .32, -19, -.045, 'shake'],
+      [4150, 0, 0, 0, 'wet'],
+      [4450, 0, -2, -.018, 'wet'],
+      [4630, 0, 0, 0, 'idle'],
+      [4800, 0, 0, 0, 'idle'],
+    ];
+    // Calibrate submersion and emergence against the actual art, not an assumed
+    // foot height. World offsets stay invariant when the viewport is resized.
+    const top = popo.poseLocalPoint('surface', 'top').y;
+    const underwater = game.waterline - origin.y - top + 8;
+    nodes[7][2] = underwater;
+    nodes[8][2] = underwater + 2;
+    const afloat = underwater - 112;
+    for (const i of [9, 10, 11, 12]) nodes[i][2] += afloat - 63;
+    // The two climb keys rotate the body around the SAME planted forepaw.
+    const gripPoint = { x: edge-5, y: game.waterline-21 };
+    const climbHand = popo.poseLocalPoint('climb','hand');
+    for (const [index,angle] of [[12,-.03],[13,-.58]]) {
+      nodes[index][3]=angle;
+      const theta=angle*rotation;
+      nodes[index][1]=gripPoint.x-origin.x-(climbHand.x*Math.cos(theta)-climbHand.y*Math.sin(theta));
+      nodes[index][2]=gripPoint.y-origin.y-(climbHand.x*Math.sin(theta)+climbHand.y*Math.cos(theta));
     }
-    state.phase = PHASE.LOSING_BALANCE;
-    // One small double-take, then the comic beat before gravity wins.
-    await clock.tween(WRONG.doubleTake, token, (t) => {
-      m.angle = (0.045 - Math.sin(t * Math.PI) * 0.075) * rotation;
-    });
-    popo.setMishapPose('brace', 'hand');
-    await move(WRONG.brace, { x: fallX * 0.38, y: -8, angle: 0.16 * rotation,
-      rodBend: 0.06, raftAngle: reduced ? 0 : 0.008 });
-
-    await clock.wait(WRONG.hang, token);
-    state.phase = PHASE.FALLING;
-    sound('slip');
-    const start = { x: m.x, y: m.y, angle: m.angle };
-    let released = null;
-    let releasedHook = null;
-    let impact = false;
-    const footY = popo.sourcePoint(242, 336).y;
-    const fallY = game.waterline - footY + 35;
-    await clock.tween(WRONG.fall, token, (t) => {
-      m.x = start.x + (fallX - start.x) * ease.out(t);
-      m.y = start.y + (fallY - start.y) * t * t - 22 * Math.sin(Math.PI * t);
-      m.angle = start.angle + (0.38 * rotation - start.angle) * t;
-      m.raftAngle *= 0.92;
-      if (t >= 0.2 && !released) {
-        released = { ...popo.mishapRod() };
-        releasedHook = { ...popo.line.hook };
-        m.rod = { ...released };
-        popo.setMishapPose('slip', 'head');
-        popo.line.mode = 'slack';
-        popo.line.tension = 0;
+    let released = null, hookRelease = null, impacted = false;
+    let previousContact = null;
+    let eventIndex = 0;
+    let feedback = Promise.resolve();
+    const events = [
+      [0, () => { state.phase = PHASE.WRONG_PULL; sound('tug'); try { audio.duck(WRONG_DURATION); } catch (e) { /* optional music */ } }],
+      [400, () => { state.phase = PHASE.LOSING_BALANCE; fish.wiggle(); }],
+      [950, () => { state.phase = PHASE.FALLING; sound('slip');
+        released = { ...popo.mishapRod() }; hookRelease = { ...popo.line.hook };
+        popo.line.mode = 'slack'; popo.line.tension = 0;
+        fish.frozen = false;
+      }],
+      [1750, () => { state.phase = PHASE.SUBMERGED; sound('bubbles');
+        fx.bubbleBurst(origin.x + landingX, game.waterline + 20); }],
+      [2050, () => { state.phase = PHASE.RESURFACING; }],
+      [2300, () => { sound('bloop'); fx.ripple(origin.x + landingX, game.waterline, .85); }],
+      [2600, () => { fx.drips(popo.bodyLandmark('head')); }],
+      [2750, () => { state.phase = PHASE.RECOVERING; }],
+      [3790, () => { sound('drip'); fx.drips(popo.bodyLandmark('head')); }],
+      [4150, () => {
+        ui.setInstruction(game.wrongText(fish));
+        feedback = game.say(STORY.wrong, token);
+        // Attach cancellation handling immediately, even while the motion is running.
+        feedback.catch(() => {});
+      }],
+    ];
+    await clock.tween(WRONG_DURATION, token, progress => {
+      const ms = progress * WRONG_DURATION;
+      m.time = ms;
+      let i = 0;
+      while (i < nodes.length - 2 && ms > nodes[i + 1][0]) i++;
+      const a = nodes[i], b = nodes[i + 1];
+      const t = Math.max(0, Math.min(1, (ms - a[0]) / (b[0] - a[0])));
+      // Cubic Hermite position interpolation preserves velocity at interior keys.
+      const before = nodes[Math.max(0, i - 1)], after = nodes[Math.min(nodes.length - 1, i + 2)];
+      for (const [key, col] of [['x', 1], ['y', 2], ['angle', 3]]) {
+        const span = b[0] - a[0];
+        const va = i === 0 ? 0 : (b[col] - before[col]) / (b[0] - before[0]);
+        const vb = i + 1 === nodes.length - 1 ? 0 : (after[col] - a[col]) / (after[0] - a[0]);
+        m[key] = (2*t*t*t-3*t*t+1)*a[col] + (t*t*t-2*t*t+t)*span*va
+          + (-2*t*t*t+3*t*t)*b[col] + (t*t*t-t*t)*span*vb;
+      }
+      m.angle *= rotation;
+      const poseMix = a[4] === b[4] ? 0 : ease.inOut(Math.max(0,Math.min(1,(ms-b[0]+110)/110)));
+      popo.blendMishapPose(a[4], b[4], poseMix);
+      if (ms >= 3030 && ms <= 3460) {
+        const paw=popo.bodyLandmark('hand');
+        m.x += gripPoint.x-paw.x;
+        m.y += gripPoint.y-paw.y;
+      }
+      m.raftAngle = ms < 1450 ? Math.sin(ms / 1450 * Math.PI) * .012 * rotation : 0;
+      m.rodBend = ms < 950 ? Math.sin(ms / 950 * Math.PI) * .06 : 0;
+      m.deckOcclusion = ms > 2750 && ms < 3790;
+      while (eventIndex < events.length && ms >= events[eventIndex][0]) events[eventIndex++][1]();
+      if (ms < 950) {
+        const k = ease.inOut(Math.min(1, ms / 400));
+        fish.x = home.x + pull * k;
+        fish.y = home.y + Math.sin(ms / 950 * Math.PI) * 7;
+        popo.line.tension = 1 + .8 * Math.sin(Math.min(1, ms / 950) * Math.PI);
       }
       if (released) {
-        const k = ease.out(Math.min(1, (t - 0.2) / 0.8));
-        m.rod.x = released.x + (edge - 105 - released.x) * k;
-        m.rod.y = released.y + (game.waterline - 57 - released.y) * k - Math.sin(k * Math.PI) * 16;
-        m.rod.angle = released.angle + (0.83 - released.angle) * k;
-        popo.line.arc = k * 0.7;
+        const k = ease.out(Math.max(0, Math.min(1, (ms - 950) / 500)));
+        const resting = { x: edge - 88, y: game.waterline - 47, angle: .74 };
+        m.rod = { x: released.x + (resting.x - released.x) * k,
+          y: released.y + (resting.y - released.y) * k - Math.sin(k * Math.PI) * 18,
+          angle: released.angle + (resting.angle - released.angle) * k };
+        if (ms > 4150) {
+          const grip = popo.bodyLandmark('hand');
+          const take = ease.inOut(Math.min(1, (ms - 4150) / 480));
+          m.rod.x += (grip.x - m.rod.x) * take;
+          m.rod.y += (grip.y - m.rod.y) * take;
+          m.rod.angle *= 1 - take;
+        }
         const tip = popo.rodTip();
-        popo.line.hook.x = releasedHook.x + (tip.x - releasedHook.x) * k * 0.25;
-        popo.line.hook.y = releasedHook.y + (tip.y + popo.line.length - releasedHook.y) * k * 0.25;
+        const reel = ease.inOut(Math.min(1, Math.max(0, (ms - 950) / 850)));
+        popo.line.hook.x = hookRelease.x + (tip.x + Math.sin(popo.swayT) * 7 - hookRelease.x) * reel;
+        popo.line.hook.y = hookRelease.y + (tip.y + popo.line.length + Math.cos(popo.swayT) * 1.5 - hookRelease.y) * reel;
+        popo.line.arc = Math.sin(reel * Math.PI) * .5;
       }
-      const foot = popo.bodyLandmark('contact');
-      if (!impact && foot.y >= game.waterline && foot.x > edge) {
-        impact = true;
-        fx.splash(foot.x, game.waterline, false);
-        fx.ripple(foot.x, game.waterline, reduced ? 0.6 : 1.1);
-        sound('splashSmall');
+      const contact = popo.bodyLandmark('contact');
+      if (!impacted && ms >= 950 && contact.y >= game.waterline && contact.x > edge + 15) {
+        impacted = true;
+        // Interpolate the crossing, even if an entire contact frame was skipped.
+        const k = previousContact ? Math.max(0, Math.min(1,
+          (game.waterline - previousContact.y) / (contact.y - previousContact.y || 1))) : 1;
+        m.impactX = previousContact ? previousContact.x + (contact.x - previousContact.x) * k : contact.x;
+        m.impactTime = ms;
+        fx.splash(m.impactX, game.waterline, true);
+        sound('splashBig');
       }
+      previousContact = contact;
     });
-    ui.setInstruction(game.wrongText(fish));
-    // Keep the released hook visible on its slack line during the quick dip.
-    const submergedY = game.waterline - (popo.bodyLandmark('top').y - m.y) + 22;
-    await move(WRONG.dipIn, { y: submergedY, angle: 0 });
-    popo.setMishapPose('surface');
-    const headY = popo.bodyLandmark('top').y - m.y;
-    m.y = game.waterline - headY + 8;
-    state.phase = PHASE.SUBMERGED;
-    fx.bubbleBurst(popo.mishapBodyPoint(210, 175).x, game.waterline + 16);
-    sound('bubbles');
-    await clock.wait(WRONG.dip, token);
-
-    state.phase = PHASE.RESURFACING;
-    sound('recover');
-    await move(WRONG.emerge, { y: game.waterline - headY - 85 });
-    fx.ripple(popo.bodyLandmark('head').x, game.waterline, 0.7);
-    // Puff-cheek pop, blink, then an eager look toward the raft.
-    popo.setMishapPose('blink', 'head');
-    sound('puff');
-    await clock.wait(WRONG.blink, token);
-    popo.setMishapPose('surface', 'head');
-    await reelLineHome(game, token);
-    state.phase = PHASE.RECOVERING;
-    popo.setMishapPose('climb', 'head');
-    // Approach the edge, lift onto the deck, then scoot back to the registered seat.
-    await move(WRONG.reach, { x: fallX * 0.7, angle: -0.12 * rotation });
-    await move(WRONG.climb, { x: fallX * 0.42, y: -15, angle: -0.08 * rotation });
-    popo.setMishapPose('shake', 'head');
-    await move(WRONG.seat, { x: 0, y: 0, angle: 0, raftAngle: 0, rodBend: 0 });
-    fx.drips(popo.mishapBodyPoint(190, 230));
-    sound('drip');
-    await clock.tween(WRONG.wet, token, (t) => {
-      m.angle = Math.sin(t * Math.PI * 4) * 0.045 * (1 - t) * rotation;
-      m.y = -Math.sin(t * Math.PI * 2) * 3 * (1 - t) * rotation;
-    });
-    popo.setMishapPose('wet', 'head');
-    const restingRod = { ...m.rod };
-    await clock.tween(WRONG.grip, token, (t) => {
-      const k = ease.inOut(t);
-      const grip = popo.bodyLandmark('hand');
-      m.rod.x = restingRod.x + (grip.x - restingRod.x) * k;
-      m.rod.y = restingRod.y + (grip.y - restingRod.y) * k - Math.sin(t * Math.PI) * 18;
-      m.rod.angle = restingRod.angle * (1 - k);
-      fish.x = home.x + pull * (1 - k);
-    });
-    await clock.wait(WRONG.smile, token);
-    popo.endMishap();
-    fish.x = home.x;
-    fish.y = home.y;
-    fish.frozen = false;
-    state.phase = PHASE.READY;
-    state.selectedFish = null;
-    state.idleTime = 0;
-    ui.setHitsEnabled(true);
+    await feedback;
+    if (!isCurrent(token)) throw new Cancelled();
+    restore();
     game.revertInstructionIn(3500);
-    game.restoreTutorialHand();
   } catch (e) {
-    if (isCurrent(token)) {
-      popo.endMishap();
-      fish.x = home.x;
-      fish.y = home.y;
-      fish.frozen = false;
-      state.selectedFish = null;
-      state.phase = PHASE.READY;
-      ui.setHitsEnabled(true);
-      game.restoreTutorialHand();
-    }
+    if (isCurrent(token)) { game.endLine(); audio.stopEffects(); fx.clearTransient(); restore(); }
+    else { popo.endMishap(); fish.frozen = false; }
     swallow(e);
   }
 }

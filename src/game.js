@@ -132,6 +132,7 @@ class Game {
     this.audio.stopEffects();
     this.audio.stopMusic();
     this.popo.endMishap();
+    this.endLine();
     this.ui.hideHand();
     this.ui.setHitsEnabled(false);
     state.selectedFish = null;
@@ -462,9 +463,9 @@ class Game {
   // --- loop -------------------------------------------------------------------
   loop(now) {
     if (!this.running) return;
-    const dt = Math.min(0.05, Math.max(0, (now - this.lastFrame) / 1000));
+    const dt = Math.min(0.1, Math.max(0, (now - this.lastFrame) / 1000));
     this.lastFrame = now;
-    if (!state.paused) this.update(dt);
+    if (!state.paused && !document.hidden) this.update(dt);
     this.draw();
     requestAnimationFrame((t) => this.loop(t));
   }
@@ -494,16 +495,24 @@ class Game {
     this.ui.placeSpeech(p.anchor.x + 78 + p.travelShift, p.anchor.y - 238 + p.bob);
   }
 
-  endLine() {
+  endLine(cancelled = true) {
+    const dialogue = this.dialogue;
     this.dialogue = null;
     this.ui.hideLines();
+    if (dialogue) {
+      if (cancelled) dialogue.reject(new Cancelled());
+      else dialogue.resolve();
+    }
   }
 
   revealWord(d, quiet) {
     const i = d.next;
     const word = d.words[i];
     this.ui.revealWord(i, word.em);
-    if (!quiet) this.audio.play(word.em ? 'boing' : d.who === 'popo' ? 'talk' : 'word');
+    if (!quiet) {
+      try { this.audio.play(word.em ? 'boing' : d.who === 'popo' ? 'talk' : 'word'); }
+      catch (e) { /* Optional audio must not stall dialogue or retain input locks. */ }
+    }
     if (d.cue && !d.cueDone && d.cue.word <= i) {
       d.cueDone = true;
       this.storyCue(d.cue.do);
@@ -529,7 +538,6 @@ class Game {
     if (!d) return;
     if (!isCurrent(d.token)) {
       this.endLine();
-      d.reject(new Cancelled());
       return;
     }
     if (d.next < d.words.length) {
@@ -538,8 +546,7 @@ class Game {
     } else {
       d.held += dt * 1000;
       if (d.held >= d.hold) {
-        this.endLine();
-        d.resolve();
+        this.endLine(false);
         return;
       }
     }
@@ -1008,6 +1015,7 @@ class Game {
     for (const f of this.ambient) f.draw(ctx);
     for (const f of state.fish) f.draw(ctx);
     if (this.leaper) this.leaper.draw(ctx);
+    this.fx.drawSplashLayer(ctx, false);
     this.popo.drawLine(ctx);
     this.popo.draw(ctx);
     this.drawMark(ctx);

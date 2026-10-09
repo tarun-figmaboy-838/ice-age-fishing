@@ -40,7 +40,7 @@ async function loadCoreAssets() {
     loadImage('assets/sprites/fish.webp'),
     preloadBackground(0),
     loadImage('assets/sprites/popo-props.webp'),
-    loadImage('assets/sprites/popo-mishap-poses-v2.webp'),
+    loadImage('assets/sprites/popo-mishap.png'),
     loadImage(TITLE),
     loadImage(PLAY),
   ]);

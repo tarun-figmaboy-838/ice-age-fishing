@@ -20,7 +20,13 @@ const clock = {
         continue;
       }
       const t = Math.min(1, (this.time - w.start) / w.duration);
-      if (w.onFrame) w.onFrame(t);
+      try {
+        if (w.onFrame) w.onFrame(t);
+      } catch (error) {
+        waiting.splice(i, 1);
+        w.reject(error);
+        continue;
+      }
       if (t >= 1) {
         waiting.splice(i, 1);
         w.resolve();

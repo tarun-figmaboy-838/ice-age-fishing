@@ -1,0 +1,13 @@
+Generated with the built-in image_gen tool (imagegen skill), 9 October 2026.
+Identity reference: assets/sprites/popo-fishing.webp.
+Selected generation: exec-91705e5c-d016-46be-b461-d705ad3b9902.png.
+Delivered source: asset/popo-mishap-new.png (cleaned alpha).
+Runtime: assets/sprites/popo-mishap.png (lossless padded RGBA).
+Two earlier repairs of the damaged atlas were rejected; neither is used by the game.
+The fresh generation required deterministic exterior-alpha cleanup using build-mishap.py:
+exterior connected matte/chroma removal, largest-component selection, one-pixel inward
+matte trim, antialiased boundary, near-opaque interior normalization. Interior mouth/ear
+colors are protected by exterior connectivity. Normal packing does not repeat cleanup.
+
+Final generation prompt:
+Create NEW artwork: a polished production sprite atlas for this exact Popo polar bear character. Reference is identity ONLY; do NOT copy the fishing equipment. Preserve cream-white fluffy fur, blue eyes, black nose, same facial proportions, tuft, chunky paws, rounded belly, warm 3D cartoon rendering and camera. Transparent landscape canvas 2048x1024; exactly FOUR columns TWO rows of equal 512x512 cells. Exactly eight full body Popos; SAME scale, each around 360 pixels tall, centered with generous transparent margins. Row-major poses: 1 seated surprised facing right tiny O mouth, paws together holding nothing; 2 seated resisting tug leaning right, eyebrows uneven, both paws forward empty; 3 airborne facing right, two arms flailing and two rear feet kicking, cute whoops expression; 4 upright facing right cheeks puffed paws near chest; 5 exact same upright pose but eyes closed silly smile; 6 reaching LEFT with both paws to climb an imaginary edge, head looking left, belly and rear feet trailing right; 7 seated one paw scratches ear eyes closed sheepish grin; 8 seated facing RIGHT blue eyes open warm embarrassed smile, paws together empty, feet forward matching idle. Each has exactly two arms and two feet, all connected naturally. No rods, lines, hooks, ropes, boats, rafts, buckets, water, splashes, scenery, shadows, labels, grid, watermark. Genuine alpha transparency, absolutely clean antialiased fur edges, NO white matte and NO red/yellow halo or edge artifacts. Entire tuft ears paws and feet inside each cell with at least 40px padding. New clean frames suitable for a released children's game.
