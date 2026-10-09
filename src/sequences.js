@@ -395,8 +395,8 @@ async function tutorial(game) {
     for (const f of state.fish) f.frozen = true;
     ui.setInstruction('Help Popo find the shapes!', null);
     await clock.wait(1900, token);
-    ui.setInstruction('Tap the circle fish.', 'circle');
-    game.showHandOn(state.fish.find((f) => f.key === 'circle'));
+    ui.setInstruction(`Tap the ${getShape(state.target).name.toLowerCase()} fish.`, state.target);
+    game.showHandOn(state.fish.find((f) => f.key === state.target));
     await clock.wait(1500, token);
     for (const f of state.fish) f.frozen = false;
     state.phase = PHASE.READY;

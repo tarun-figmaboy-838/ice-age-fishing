@@ -46,41 +46,41 @@ const SHAPES = {
 };
 
 // Each challenge lists the target and the distractors explicitly so no distractor can ever
-// also belong to the target's family (see categories above).
+// also belong to the target's family (see categories above): a square would count as a
+// correct answer for "rectangle", "rhombus" and "kite", so it is never a distractor there.
 const LOCATIONS = [
   {
-    name: 'Frosty Bay', background: 0, waterline: 388,
+    name: 'Triangle Bay', background: 0, waterline: 388,
     challenges: [
-      { target: 'circle', others: ['triangle', 'square'], tutorial: true },
-      { target: 'triangle', others: ['circle', 'oval'] },
-      { target: 'square', others: ['triangle', 'circle'] },
-      { target: 'oval', others: ['circle', 'square'] },
+      { target: 'triangle', others: ['circle', 'square'], tutorial: true },
+      { target: 'triangle', others: ['pentagon', 'oval'] },
+      { target: 'triangle', others: ['rectangle', 'hexagon'] },
     ],
   },
   {
-    name: 'Glacier Cove', background: 1, waterline: 390,
+    name: 'Pentagon Cove', background: 1, waterline: 390,
     challenges: [
-      { target: 'rectangle', others: ['trapezium', 'kite'] },
-      { target: 'parallelogram', others: ['trapezium', 'triangle'] },
-      { target: 'trapezium', others: ['parallelogram', 'kite'] },
-      { target: 'kite', others: ['rectangle', 'trapezium'] },
-      { target: 'rhombus', others: ['rectangle', 'trapezium'] },
+      { target: 'pentagon', others: ['triangle', 'square'] },
+      { target: 'pentagon', others: ['hexagon', 'circle'] },
+      { target: 'pentagon', others: ['octagon', 'rectangle'] },
     ],
   },
   {
-    name: 'Iceberg Pass', background: 2, waterline: 387,
+    name: 'Hexagon Pass', background: 2, waterline: 387,
     challenges: [
-      { target: 'pentagon', others: ['square', 'hexagon'] },
-      { target: 'hexagon', others: ['pentagon', 'triangle'] },
-      { target: 'heptagon', others: ['hexagon', 'square'] },
+      { target: 'hexagon', others: ['triangle', 'circle'] },
+      { target: 'hexagon', others: ['pentagon', 'square'] },
+      { target: 'hexagon', others: ['octagon', 'oval'] },
     ],
   },
   {
-    name: 'Aurora Waters', background: 3, waterline: 388,
+    name: 'Quadrilateral Waters', background: 3, waterline: 388,
     challenges: [
-      { target: 'octagon', others: ['hexagon', 'square-tilted'] },
-      { target: 'nonagon', others: ['pentagon', 'hexagon'] },
-      { target: 'decagon', others: ['octagon', 'hexagon'] },
+      { target: 'square', others: ['rectangle', 'kite'] },
+      { target: 'rectangle', others: ['kite', 'parallelogram'] },
+      { target: 'parallelogram', others: ['kite', 'hexagon'] },
+      { target: 'rhombus', others: ['rectangle', 'kite'] },
+      { target: 'kite', others: ['rectangle', 'parallelogram'] },
     ],
   },
 ];
