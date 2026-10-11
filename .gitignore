@@ -2,3 +2,8 @@
 .vercel/
 .env
 .env.*
+# rowing rig previews written by tools/build-rowing.py (the game uses popo-row-cycle.webp)
+assets/sprites/paddling/atlas.png
+assets/sprites/paddling/frame-*.png
+assets/sprites/paddling/manifest.json
+assets/sprites/paddling/preview.apng

@@ -1,0 +1,32 @@
+Popo paddling regeneration
+
+New source: asset/popo-paddling-rig-source.png, generated using the existing
+Popo fishing art as identity reference; exact prompt in popo-paddling-prompt.txt.
+The source contains separate bear and paddle. Exported body.png has no props.
+
+Runtime: src/rowing.js + src/rowing-data.js; assets.js loads two alpha PNGs;
+popo.js renders the articulated body and rigid paddle at the existing seat;
+sequences.js drives the rig using the existing cancellable animation clock.
+index.html loads the rig before Popo. No UI or level rebuild.
+
+Each loop is continuous, not a sequence of crossfaded cutouts. Seated feet
+remain fixed; forearms follow two grips on one rigid paddle. Small torso/head
+motion and a brief blink accompany reach, entry, power pull, exit and recovery.
+Normal travel: three 1.8-second strokes. Reduced motion: one 2.4-second stroke.
+Exported preview: 2.1 seconds. Splash/audio use measured blade-water crossing.
+The paddle is clipped/tinted below the existing world waterline.
+
+Exports: assets/sprites/paddling/atlas.png (3x3, 1280px cells), nine frame PNGs,
+body.png, paddle.png, manifest.json and transparent 63-frame preview.apng.
+Regenerate deterministic exports: python3 tools/build-rowing.py
+Requires Pillow, Python Playwright and Chromium. No npm/build step exists.
+
+QA: python3 tests/rowing.py; python3 tests/mishap.py;
+python3 tests/asset_alpha.py; JavaScript syntax and git diff whitespace checks.
+Browser tests cover 15/30/60 FPS, desktop/laptop/mobile/tablet, resize, reduced
+motion, loop periodicity, splash sound counts, pause and cancellation/restart.
+Existing mishap regression covers wrong retries, input locking, dialogue,
+correct catch and cleanup. Atlas and desktop gameplay screenshot inspected.
+
+Limits: articulated 2D raster, not a skeletal 3D animation; physical mobile
+hardware/audio listening and GPU performance profiling have not been tested.
