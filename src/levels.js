@@ -74,7 +74,8 @@ const STORY = {
   ],
   wrong: { who: 'popo', text: 'Whoopsie Doopsie!' },
   catch: { who: 'popo', text: '*Great* catch!', cue: { word: 0, do: 'hop' } },
-  // after the last level, a fish Popo has never seen leaps out of the water
+  // after the last level, a fish Popo has never seen leaps out of the water; then Swiftee the
+  // bird flies in with the answer to Popo's question and the Next button appears
   ending: {
     fish: 'trapezium',
     woah: [
@@ -83,8 +84,9 @@ const STORY = {
     ],
     after: [
       { who: 'popo', text: 'What *kind* of fish was that?', cue: { word: 1, do: 'wonder' } },
-      { who: 'popo', text: "Let's find *out!*", cue: { word: 2, do: 'hop' } },
     ],
+    // stays up beside Swiftee until Next is pressed
+    swiftee: { who: 'swiftee', text: "Let's find *out!*", cue: { word: 2, do: 'twirl' }, stay: true },
   },
 };
 

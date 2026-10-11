@@ -21,7 +21,8 @@ ui.on('resume', () => { audio.play('ui'); game.togglePause(); });
 ui.on('restart', () => { audio.play('ui'); game.restart(); });
 ui.on('sound', () => { game.toggleSound(); audio.play('ui'); });
 ui.on('heroTap', () => audio.play('wiggle'));
-ui.on('playAgain', () => { audio.play('ui'); game.restart(); });
+ui.on('playAgain', () => { audio.play('ui'); game.restart(); ui.el.pause.focus({ preventScroll: true }); });
+ui.on('next', () => { audio.play('ui'); game.next(); });
 
 try {
   if (localStorage.getItem('popo-muted') === '1') {
@@ -43,14 +44,16 @@ document.addEventListener('keydown', (e) => {
 });
 game.resize();
 
-if (new URLSearchParams(location.search).has('debug')) {
+const params = new URLSearchParams(location.search);
+if (params.has('debug') || params.get('dev') === '1') {
   window.popoDebug = { state, game };
 }
 
 ui.setLoading('Loading…');
-loadCoreAssets()
+Promise.all([loadCoreAssets(), audio.prepareVoices(PopoGame.VOICE_DATA)])
   .then(() => {
     ui.setLoading('');
+    game.popo.rowTint(); // decode the paddling frames now, not on the first stroke
     game.showIdleScene();
   })
   .catch((err) => ui.setLoading(`Could not load the game art (${err.message}).`));

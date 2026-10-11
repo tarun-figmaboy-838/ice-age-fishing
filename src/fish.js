@@ -107,6 +107,7 @@ class Fish {
     if (this.frozen) return;
     if (this.escaping) {
       this.x += this.speed * dt;
+      if (PopoGame.state.phase === 'levelTransition') this.alpha = Math.max(0, this.alpha - dt / 0.6);
       if (this.x > area.right + this.w * 1.5) {
         this.escaping = false;
         this.dir = -1;

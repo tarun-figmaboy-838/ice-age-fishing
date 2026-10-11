@@ -41,7 +41,7 @@ function preloadBackground(index) {
 }
 
 async function loadCoreAssets() {
-  const [fishing, rowing, fish, bg0, props, mishapPoses, title, play, paddlingBody, paddlingPaddle] = await Promise.all([
+  const [fishing, rowing, fish, bg0, props, mishapPoses, title, play, rowCycle, swiftee] = await Promise.all([
     loadImage('assets/sprites/popo-fishing.webp'),
     loadImage('assets/sprites/popo-rowing.webp'),
     loadImage('assets/sprites/fish.webp'),
@@ -50,12 +50,12 @@ async function loadCoreAssets() {
     loadImage('assets/sprites/popo-mishap.png'),
     loadImage(TITLE),
     loadImage(PLAY),
-    loadImage('assets/sprites/paddling/body.png'),
-    loadImage('assets/sprites/paddling/paddle.png'),
+    loadImage('assets/sprites/popo-row-cycle.webp'),
+    loadImage('assets/sprites/swiftee.webp'),
   ]);
-  assets.paddlingBody = paddlingBody;
-  assets.paddlingPaddle = paddlingPaddle;
+  assets.rowCycle = rowCycle;
   assets.title = title;
+  assets.swiftee = swiftee;
   assets.play = play;
   assets.props = props;
   assets.mishapPoses = mishapPoses;

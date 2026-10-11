@@ -20,6 +20,11 @@ painting is drawn plainly.
 
 Append `?debug` to the URL to expose `window.popoDebug = { state, game }` for testing.
 
+Append `?dev=1` for a small panel of screen jumps (bottom left): title, intro, each level,
+a right or wrong catch, rowing on, the mystery fish, Swiftee and the summary. Number keys
+1–9 and 0 press the first ten buttons; the backtick key folds the panel away. Dev mode also
+exposes `window.popoDebug`.
+
 ## Deploy
 
 The folder is a static site. On Vercel, import the GitHub repository and deploy with no build
@@ -37,6 +42,14 @@ original artwork and tools out of the deployment.
 - `asset/` – the untouched source artwork.
 - `assets/` – the compressed WebP art the game loads, generated from `asset/`.
 - `tools/build-assets.py` – rebuilds `assets/` and `src/sprite-data.js` (needs Pillow).
+- `tools/build-voice.py` – records the voice-overs with Gemini text-to-speech into
+  `src/voice-data.js` (see Voice-overs below).
+- `tools/build-rowing.py` builds the articulated paddling rig (`src/rowing.js`,
+  `src/rowing-data.js`, `assets/sprites/paddling/body.png` and `paddle.png`) from
+  `asset/popo-paddling-rig-source.png`; `tools/build-rowing-cycle.py` then pre-renders one
+  stroke of it into `assets/sprites/popo-row-cycle.webp` (24 frames), which the game crossfades
+  through while Popo rows. The rig's motion maths still times the splashes. Rendering the mesh
+  live cost 20–120 ms a frame; playing the frames costs about 4 ms.
   `tools/build-popo-layers.py` cuts the raft and rod props used by the wrong-answer fall.
   It erases the baked fishing line and hook from the fishing sheets so the game can draw a
   single procedural line, measures each frame's raft anchor and rod tip, and compresses
@@ -48,7 +61,27 @@ Title banner with a floating play button (fish circle it) → the narrator's ope
 Triangle Bay, Pentagon Cove, Hexagon Pass (one catch each; Popo says "Great catch!" and the
 reward shows the fish and its name) → Quadrilateral Waters (catch all the quadrilateral fish;
 no trapezium) → a trapezium fish Popo has never seen leaps out of the water ("Woah! I haven't
-seen that one before!") → summary. Story lines live in `STORY` in `src/levels.js`.
+seen that one before!" "What kind of fish was that?") → Swiftee the bird flies in and says
+"Let's find out!" on the wing → a Next button → summary. Story lines live in `STORY` in
+`src/levels.js`; Swiftee is `src/swiftee.js` (art from `asset/swiftee.png`, four wing beats
+registered on the belly).
+
+## Voice-overs
+
+The narrator, Popo and Swiftee are voiced with Gemini text-to-speech. The clips are recorded
+once by `tools/build-voice.py` and shipped as small MP3s inside `src/voice-data.js`, so the API
+key never reaches the game. To record or re-record them:
+
+```
+echo 'GEMINI_API_KEY=your-key' > .env        # .env is git- and Vercel-ignored
+python3 -m pip install --user lameenc
+python3 tools/build-voice.py                 # records missing lines; --force re-records all
+```
+
+The cast (voice and delivery for each speaker) and the line list are at the top of the script.
+Each clip is keyed by speaker and on-screen text: the words of a line appear as they are spoken,
+the music ducks under the voice, and a line without a clip falls back to the synthesized
+voice blips. Raw recordings are kept in `asset/voice/`.
 
 ## Notes on the supplied art
 

@@ -29,6 +29,7 @@ BACKGROUNDS = [
 TITLE = 'title-banner.png'
 PLAY_BUTTON = 'play-button.png'
 HINT_HAND = 'hint-hand.png'
+SWIFTEE = 'swiftee.png'
 # Popo's poses: 3x3 sheets of the character with his rod or paddle only (no raft, line or hook).
 FISHING = 'popo-fishing-clean.png'
 ROWING = 'popo-paddling.png'
@@ -140,11 +141,10 @@ def is_pure_fringe(r, g, b):
     return (r > 170 and g < 70 and b < 70) or (r > 200 and g > 185 and b < 80)
 
 
-def normalise_sheet(im, count=9, margin=28):
+def cut_figures(im, count):
     """Generated sheets can have red/yellow specks scattered around the figures and figures
     that cross their grid lines. Find each whole figure by shape (thin specks don't survive an
-    opening), keep it with its soft edge, and repack the figures into an even 3x3 grid in
-    reading order with clear space around every one."""
+    opening) and cut it out with its soft edge, as (centre y, centre x, cropped figure)."""
     mask = im.getchannel('A').point(lambda v: 255 if v > 20 else 0)
     core = mask.filter(ImageFilter.MinFilter(7)).filter(ImageFilter.MaxFilter(7))
     pieces = figure_masks(core)[:count]
@@ -170,6 +170,13 @@ def normalise_sheet(im, count=9, margin=28):
         cy = sum(y for _, y in piece) / len(piece)
         cx = sum(x for x, _ in piece) / len(piece)
         figures.append((cy, cx, fig.crop(fig.getchannel('A').getbbox())))
+    return figures
+
+
+def normalise_sheet(im, count=9, margin=28):
+    """Repacks a sheet's whole figures into an even 3x3 grid in reading order with clear space
+    around every one."""
+    figures = cut_figures(im, count)
     figures.sort(key=lambda f: f[0])
     rows = [sorted(figures[i:i + GRID], key=lambda f: f[1]) for i in range(0, count, GRID)]
     ordered = [f[2] for row in rows for f in row]
@@ -374,6 +381,34 @@ def character_sheet(name, key, with_rod=True, repack=True):
     return dict(width=sheet.size[0], height=sheet.size[1], frames=measure_character_frames(sheet, with_rod))
 
 
+def is_belly(r, g, b, a):
+    return a > 200 and r > 220 and 150 < g < 215 and b < 140
+
+
+def build_swiftee(size=260, margin=12):
+    """Swiftee's four wing beats in one row. The wings change every frame's outline, so the
+    frames register by the yellow belly to keep the body still while the wings flap."""
+    figures = sorted(cut_figures(Image.open(os.path.join(SRC, SWIFTEE)).convert('RGBA'), 4), key=lambda f: f[1])
+    k = size / max(f[2].size[1] for f in figures)
+    frames, bellies = [], []
+    for _, _, fig in figures:
+        fig = fig.resize((round(fig.size[0] * k), round(fig.size[1] * k)), Image.LANCZOS)
+        px = fig.load()
+        pts = [(x, y) for y in range(fig.size[1]) for x in range(fig.size[0]) if is_belly(*px[x, y])]
+        frames.append(fig)
+        bellies.append((sum(x for x, _ in pts) / len(pts), sum(y for _, y in pts) / len(pts)))
+    left = max(b[0] for b in bellies) + margin
+    top = max(b[1] for b in bellies) + margin
+    cw = math.ceil(left + max(f.size[0] - b[0] for f, b in zip(frames, bellies)) + margin)
+    ch = math.ceil(top + max(f.size[1] - b[1] for f, b in zip(frames, bellies)) + margin)
+    atlas = Image.new('RGBA', (cw * len(frames), ch), (0, 0, 0, 0))
+    for i, (fig, (bx, by)) in enumerate(zip(frames, bellies)):
+        atlas.alpha_composite(fig, (i * cw + round(left - bx), round(top - by)))
+    atlas.save(os.path.join(OUT, 'sprites', 'swiftee.webp'), 'WEBP', quality=92, method=6)
+    print('swiftee', atlas.size)
+    return dict(width=cw, height=ch, frames=len(frames), belly=[round(left), round(top)])
+
+
 def main():
     os.makedirs(os.path.join(OUT, 'backgrounds'), exist_ok=True)
     os.makedirs(os.path.join(OUT, 'sprites'), exist_ok=True)
@@ -401,6 +436,7 @@ def main():
     fish, boxes, mouths = build_fish_atlas()
     fish.save(os.path.join(OUT, 'sprites', 'fish.webp'), 'WEBP', quality=90, method=6)
     data['fish'] = dict(width=fish.size[0], height=fish.size[1], boxes=boxes, mouths=mouths)
+    data['swiftee'] = build_swiftee()
     print('fish atlas', len(boxes), 'sprites')
 
     with open(os.path.join(ROOT, 'src', 'background-data.js'), 'w') as fh:
@@ -425,6 +461,7 @@ def main():
         fh.write('window.PopoGame = window.PopoGame || {};\n')
         fh.write('PopoGame.SHEET_DATA = ' + json.dumps(data['sheets'], indent=1) + ';\n')
         fh.write('PopoGame.FISH_ATLAS = ' + json.dumps(data['fish']) + ';\n')
+        fh.write('PopoGame.SWIFTEE_DATA = ' + json.dumps(data['swiftee']) + ';\n')
     print('wrote src/sprite-data.js')
 
 

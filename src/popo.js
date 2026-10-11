@@ -36,6 +36,8 @@ function frameData(sheet, name) {
   return assets.sheets[sheet].data.frames[row * 3 + col];
 }
 
+let rowTintCache = null;
+
 class Popo {
   constructor() {
     this.anchor = { x: 238, y: 400 };
@@ -171,6 +173,12 @@ class Popo {
     return { x: pv.x + lx * Math.cos(pv.angle) - ly * Math.sin(pv.angle), y: pv.y + lx * Math.sin(pv.angle) + ly * Math.cos(pv.angle) };
   }
 
+  // the top of Popo's head in the idle pose (measured from the art: 25, -268 from the seat)
+  headTop() {
+    const s = SHEETS.fishing.scale * POPO_SCALE;
+    return this.transformPoint(this.anchor.x + SEAT.dx + 25 * s, this.anchor.y + SEAT.dy - 268 * s);
+  }
+
   rodTip() {
     if (this.rowing) return null;
     if (this.mishap) return this.mishapRodPoint(1139, 70);
@@ -211,13 +219,23 @@ class Popo {
   startRowing(cycleMs = 2100) {
     this.stopFrames();
     this.setPose('fishing', 'idle', 0);
-    this.rowRig = this.rowRig || new PopoGame.PaddleRig(assets.paddlingBody, assets.paddlingPaddle, PopoGame.ROWING_RIG);
+    this.rowRig = this.rowRig || new PopoGame.PaddleRig(null, null, PopoGame.ROWING_RIG);
     this.rowing = { time: 0, cycleMs };
-    if (!this.rowCanvas) {
-      this.rowCanvas = document.createElement('canvas');
-      this.rowCanvas.width = this.rowCanvas.height = 1280;
-    }
-    this.rowCacheTime = null;
+  }
+
+  // The paddling cycle is pre-rendered (tools/build-rowing-cycle.py). Below the waterline the
+  // blade is seen through the water: a tinted copy of the frames, made once.
+  rowTint() {
+    if (rowTintCache) return rowTintCache;
+    const img = assets.rowCycle;
+    const c = document.createElement('canvas');
+    c.width = img.width;
+    c.height = img.height;
+    const g = c.getContext('2d');
+    g.filter = 'sepia(.25) hue-rotate(140deg) saturate(1.15)';
+    g.drawImage(img, 0, 0);
+    rowTintCache = c;
+    return c;
   }
 
   setRowingTime(time) {
@@ -233,27 +251,29 @@ class Popo {
   }
 
   drawRowing(ctx) {
-    const d = PopoGame.ROWING_RIG, r = this.rowing;
-    if (this.rowCacheTime !== r.time) {
-      const g = this.rowCanvas.getContext('2d');
-      g.clearRect(0,0,1280,1280);
-      g.save();g.translate(...d.frameOrigin);this.rowRig.draw(g,r.time,r.cycleMs);g.restore();
-      this.rowCacheTime = r.time;
-    }
-    const drawFigure = () => {
+    const d = PopoGame.ROWING_RIG, c = PopoGame.ROWING_CYCLE, r = this.rowing;
+    // crossfade the two frames either side of this moment in the stroke
+    const at = (((r.time / r.cycleMs) % 1 + 1) % 1) * c.frames;
+    const i = Math.floor(at) % c.frames, j = (i + 1) % c.frames, mix = at - Math.floor(at);
+    const k = d.worldScale / c.scale;
+    const x = this.anchor.x + SEAT.dx - c.seat[0] * k, y = this.anchor.y + SEAT.dy - c.seat[1] * k;
+    const drawFigure = (img) => {
       ctx.save();this.applyTransform(ctx);
-      ctx.drawImage(this.rowCanvas,
-        this.anchor.x+SEAT.dx-(d.seat[0]+d.frameOrigin[0])*d.worldScale,
-        this.anchor.y+SEAT.dy-(d.seat[1]+d.frameOrigin[1])*d.worldScale,
-        1280*d.worldScale,1280*d.worldScale);
+      for (const [f, alpha] of [[i, 1], [j, mix]]) {
+        if (alpha <= 0.01) continue;
+        ctx.globalAlpha *= alpha;
+        ctx.drawImage(img, (f % c.columns) * c.width, Math.floor(f / c.columns) * c.height, c.width, c.height,
+          x, y, c.width * k, c.height * k);
+        ctx.globalAlpha /= alpha;
+      }
       ctx.restore();
     };
     const waterline = this.anchor.y-12;
     // Actual world waterline clipping: the blade enters water without losing length.
     ctx.save();ctx.beginPath();ctx.rect(0,waterline,PopoGame.STAGE_W,PopoGame.STAGE_H);ctx.clip();
-    ctx.globalAlpha=.54;ctx.filter='sepia(.25) hue-rotate(140deg) saturate(1.15)';drawFigure();ctx.restore();
+    ctx.globalAlpha=.54;drawFigure(this.rowTint());ctx.restore();
     ctx.save();this.applyTransform(ctx);this.drawRaftProp(ctx);ctx.restore();
-    ctx.save();ctx.beginPath();ctx.rect(0,0,PopoGame.STAGE_W,waterline);ctx.clip();drawFigure();ctx.restore();
+    ctx.save();ctx.beginPath();ctx.rect(0,0,PopoGame.STAGE_W,waterline);ctx.clip();drawFigure(assets.rowCycle);ctx.restore();
   }
 
   drawPose(ctx, pose, alpha) {
@@ -281,12 +301,19 @@ class Popo {
     const r = rod.getContext('2d');
     r.drawImage(assets.sheets.fishing.img,620,0,620,435,0,0,620,435);
     r.globalCompositeOperation = 'destination-out'; r.drawImage(mask,0,0);
-    // Continue the short occluded handle behind the original gripping paws.
+    // Rebuild the handle hidden behind the gripping paws, so the rod is whole once Popo lets
+    // go: the visible rod's width (28px) and shading, from the lower ring down to a round butt.
     r.globalCompositeOperation = 'destination-over';
-    r.lineCap = 'round';r.beginPath();r.moveTo(283,338);r.lineTo(343,234);
-    r.strokeStyle='#77350e';r.lineWidth=16;r.stroke();
-    r.strokeStyle='#cf791a';r.lineWidth=11;r.stroke();
-    r.strokeStyle='#efad43';r.lineWidth=3;r.stroke();
+    const [hx, hy, bx, by] = [327, 226, 281, 342];
+    const len = Math.hypot(bx - hx, by - hy);
+    r.translate(hx, hy); r.rotate(Math.atan2(by - hy, bx - hx));
+    const shade = r.createLinearGradient(0, 14, 0, -14);
+    shade.addColorStop(0, '#f6b25a'); shade.addColorStop(0.3, '#df7f22');
+    shade.addColorStop(0.75, '#a9480f'); shade.addColorStop(1, '#6f2b06');
+    r.beginPath(); r.moveTo(0, -14); r.lineTo(len - 13, -14); r.arc(len - 13, 0, 14, -Math.PI / 2, Math.PI / 2);
+    r.lineTo(0, 14); r.closePath();
+    r.fillStyle = shade; r.fill();
+    r.strokeStyle = '#5a2306'; r.lineWidth = 2.5; r.stroke();
     this.mishapArt = { body, rod };
   }
 

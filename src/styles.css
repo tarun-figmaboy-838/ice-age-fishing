@@ -93,8 +93,6 @@ html, body {
   0%, 100% { margin: 0; }
   50% { margin: 1.1em 0 0 1.1em; }
 }
-  50% { margin-top: -1.6em; }
-}
 
 /* ---------- HUD ---------- */
 .hud { position: absolute; inset: 0; pointer-events: none; }
@@ -139,8 +137,9 @@ html, body {
 @keyframes instruction-nudge { 50% { transform: scale(1.08); } }
 
 .icon-btn {
-  width: max(4.4em, 44px);
-  height: max(4.4em, 44px);
+  font: inherit;
+  width: max(5.6em, 44px);
+  height: max(5.6em, 44px);
   border-radius: 50%;
   border: 0.18em solid var(--ink);
   background: linear-gradient(180deg, #ffd860, #ff9a1c);
@@ -235,11 +234,33 @@ html, body {
 }
 .hud.talking .instruction, .instruction.empty { opacity: 0; }
 
+/* Swiftee's bubble: the same panel with a teal outline */
+.speech.swiftee { border-color: #0f6e6a; box-shadow: 0 0.16em 0 #0f6e6a, 0 0.5em 1.2em rgba(0, 20, 60, 0.25); }
+.speech.swiftee::before { border-top-color: #0f6e6a; }
+
+/* Next, once Swiftee has spoken */
+.next-btn {
+  position: absolute;
+  right: 3.2%;
+  bottom: 5%;
+  font-size: 3.4em;
+  padding: 0.45em 1.9em;
+  animation: next-in 0.55s cubic-bezier(0.2, 1.7, 0.4, 1), next-glow 1.6s ease-in-out 0.6s infinite;
+}
+.next-btn[hidden] { display: none; }
+.next-btn::after { content: ' \25B6'; font-size: 0.7em; vertical-align: 0.12em; }
+@keyframes next-in { from { transform: translateY(1.2em) scale(0.3); opacity: 0; } }
+@keyframes next-glow {
+  0%, 100% { box-shadow: 0 0.5em 1.6em rgba(240, 138, 29, 0.45), inset 0 0.15em 0 rgba(255, 255, 255, 0.45); }
+  50% { box-shadow: 0 0 0 0.35em rgba(255, 210, 120, 0.55), 0 0.5em 2.2em rgba(240, 138, 29, 0.7), inset 0 0.15em 0 rgba(255, 255, 255, 0.45); }
+}
+
 /* ---------- overlays ---------- */
 .overlay {
   position: absolute;
   inset: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   background: rgba(3, 20, 60, 0.25);
   animation: fade-in 0.35s ease;
@@ -257,6 +278,9 @@ html, body {
   border: 0.3em solid rgba(255, 214, 140, 0.45);
   box-shadow: 0 2em 6em rgba(0, 0, 0, 0.45);
   max-width: 90%;
+  max-height: 96%;
+  overflow: auto;
+  box-sizing: border-box;
 }
 .card h2, .reward-name { margin: 0 0 0.3em; font-size: 4.4em; letter-spacing: 0.02em; color: #fff; }
 .card.wide { width: 120em; }
@@ -297,6 +321,7 @@ html, body {
 .hud.prize .instruction { opacity: 0; }
 .instruction { transition: opacity 0.3s ease; }
 .hero-fish {
+  font: inherit;
   position: relative;
   display: grid;
   place-items: center;
@@ -449,7 +474,6 @@ html, body {
 
 /* Narrow stages (phones, portrait): smaller HUD so the water stays visible, controls stay 44px. */
 @container (max-width: 720px) {
-  .stage { font-size: 4.6px; }
   .instruction { font-size: 2.4em; padding: 0.7em 1.4em 0.7em 1em; min-height: 2.4em; }
   .hud-top { gap: 0.6em; left: 1em; right: 1em; top: 1em; }
   .hand { width: 7em; height: 7em; }
@@ -457,7 +481,7 @@ html, body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hand, .speech.pop, .caption.pop { animation: none; }
+  .hand, .speech.pop, .caption.pop, .next-btn { animation: none; }
   .hero-fish, .sparkles i, .hero-glow, .prize-burst { animation: none; }
   .scene { transition: none; }
 }

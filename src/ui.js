@@ -32,7 +32,7 @@ class UI {
   constructor() {
     this.el = {
       hud: $('hud'), hits: $('hits'), hand: $('hand'), start: $('screen-start'), loading: $('loading'), play: $('btn-play'),
-      instruction: $('instruction'), instructionText: $('instruction-text'),
+      instruction: $('instruction'), instructionText: $('instruction-text'), next: $('btn-next'),
       sound: $('btn-sound'), pause: $('btn-pause'),
       reward: $('overlay-reward'), rewardFish: $('reward-fish'), rewardImg: $('reward-fish-img'), rewardName: $('reward-name'),
       pauseOverlay: $('overlay-pause'), resume: $('btn-resume'), restart: $('btn-restart'),
@@ -53,6 +53,7 @@ class UI {
     this.el.resume.addEventListener('click', h('resume'));
     this.el.restart.addEventListener('click', h('restart'));
     this.el.playAgain.addEventListener('click', h('playAgain'));
+    this.el.next.addEventListener('click', h('next'));
     this.el.rewardFish.addEventListener('click', () => {
       this.el.rewardFish.classList.remove('bounce');
       void this.el.rewardFish.offsetWidth;
@@ -69,7 +70,7 @@ class UI {
     if (this.handlers[name]) this.handlers[name](...args);
   }
 
-  // A story line: Popo's speech bubble (anchored at a stage point) or the narrator's caption.
+  // A story line: a speech bubble (Popo's or Swiftee's, anchored at a stage point) or the narrator's caption.
   // Every word is laid out up front (hidden) so the bubble never resizes as words appear.
   showLine(who, words) {
     this.hideLines();
@@ -83,7 +84,11 @@ class UI {
       line.appendChild(span);
       return span;
     });
+    el.classList.toggle('swiftee', who === 'swiftee');
     el.hidden = false;
+    if (el === this.el.speech) {
+      this.speechBox = { w: el.offsetWidth, h: el.offsetHeight, em: parseFloat(getComputedStyle(el).fontSize) };
+    }
     el.classList.remove('pop', 'bump');
     void el.offsetWidth;
     el.classList.add('pop');
@@ -108,9 +113,15 @@ class UI {
     s.width = s.height = `${(2 * r * k).toFixed(1)}px`;
   }
 
+  // (x, y) is where the tail points. The bubble sits above and to the right of it, so it's
+  // nudged down or left when it would run off the top or right of the stage.
   placeSpeech(x, y) {
-    this.el.speech.style.left = `${(x * this.scale).toFixed(1)}px`;
-    this.el.speech.style.top = `${(y * this.scale).toFixed(1)}px`;
+    const b = this.speechBox || { w: 0, h: 0, em: 0 };
+    const width = this.el.hits.clientWidth;
+    const left = Math.min(x * this.scale, width - b.w + 0.6 * b.em - 4);
+    const top = Math.max(y * this.scale, b.h + 4);
+    this.el.speech.style.left = `${left.toFixed(1)}px`;
+    this.el.speech.style.top = `${top.toFixed(1)}px`;
   }
 
   hideLines() {
@@ -281,6 +292,16 @@ class UI {
   hideSummary() {
     this.el.summary.hidden = true;
     this.setWorldBlur(false);
+  }
+
+  // --- Next, at the end of the story ----------------------------------------
+  showNext() {
+    this.el.next.hidden = false;
+    this.el.next.focus({ preventScroll: true });
+  }
+
+  hideNext() {
+    this.el.next.hidden = true;
   }
 
   showRotateHint(show) {

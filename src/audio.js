@@ -13,6 +13,11 @@ const CHORDS = [
   [196.0, 246.94, 293.66, 392.0],    // G
 ];
 
+// Must match voice_key() in tools/build-voice.py.
+function voiceKey(who, text) {
+  return `${who}:${text.replace(/\*/g, '').replace(/…/g, '...').replace(/’/g, "'").split(/\s+/).filter(Boolean).join(' ')}`.toLowerCase();
+}
+
 class AudioEngine {
   constructor() {
     this.ctx = null;
@@ -23,6 +28,54 @@ class AudioEngine {
     this.nextBeat = 0;
     this.timer = null;
     this.effectSources = new Set();
+    this.voiceBuffers = new Map();
+    this.voiceSource = null;
+  }
+
+  // Recorded voice lines (tools/build-voice.py), decoded up front with an offline context so
+  // they are ready before the first tap. Decoded buffers play in the live context later.
+  prepareVoices(data) {
+    const entries = Object.entries(data || {});
+    const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!entries.length || !OAC) return Promise.resolve();
+    const decoder = new OAC(1, 1, 24000);
+    return Promise.all(entries.map(([key, url]) => {
+      const bin = atob(url.slice(url.indexOf(',') + 1));
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+      return new Promise((resolve) => decoder.decodeAudioData(bytes.buffer, resolve, () => resolve(null)))
+        .then((buf) => { if (buf) this.voiceBuffers.set(key, buf); });
+    }));
+  }
+
+  // Plays a recorded line and returns its length in seconds (0 when there is no recording,
+  // so the caller falls back to the synthesized voice). The music ducks under the voice.
+  speak(who, text) {
+    const buf = this.voiceBuffers.get(voiceKey(who, text));
+    if (!this.ctx || !buf) return 0;
+    this.stopVoice();
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(this.voice);
+    const now = this.ctx.currentTime;
+    this.music.gain.cancelScheduledValues(now);
+    this.music.gain.setTargetAtTime(0.18, now, 0.05);
+    src.onended = () => {
+      if (this.voiceSource !== src) return;
+      this.voiceSource = null;
+      this.music.gain.setTargetAtTime(0.5, this.ctx.currentTime, 0.25);
+    };
+    src.start();
+    this.voiceSource = src;
+    return buf.duration;
+  }
+
+  stopVoice() {
+    const src = this.voiceSource;
+    if (!src) return;
+    this.voiceSource = null;
+    try { src.stop(); } catch (e) { /* already stopped */ }
+    this.music.gain.setTargetAtTime(0.5, this.ctx.currentTime, 0.25);
   }
 
   init() {
@@ -250,6 +303,8 @@ class AudioEngine {
       case 'leap': this.noise({ dur: 0.5, type: 'bandpass', freq: 400, to: 2600, q: 1.1, gain: 0.22 }); this.tone({ freq: 300, to: 760, dur: 0.4, gain: 0.08, type: 'triangle' }); break;
       case 'boing': this.tone({ freq: 170, to: 560, type: 'sine', dur: 0.22, gain: 0.12 }); this.tone({ freq: 560, to: 420, t: now + 0.2, type: 'sine', dur: 0.16, gain: 0.07 }); break;
       case 'hmm': this.tone({ freq: 330, to: 290, type: 'triangle', dur: 0.2, gain: 0.08 }); this.tone({ freq: 290, to: 380, t: now + 0.2, type: 'triangle', dur: 0.24, gain: 0.08 }); break;
+      case 'chirp': { const f = 1500 + Math.random() * 500; this.tone({ freq: f, to: f * 1.45, type: 'sine', dur: 0.06, gain: 0.06 }); this.tone({ freq: f * 1.3, to: f * 1.05, t: now + 0.06, type: 'sine', dur: 0.05, gain: 0.04 }); break; }
+      case 'flap': this.noise({ dur: 0.12, type: 'bandpass', freq: 1300, to: 520, q: 0.9, gain: 0.07 }); break;
       case 'word': { const f = 700 + Math.random() * 260; this.tone({ freq: f, to: f * 1.15, type: 'sine', dur: 0.05, gain: 0.04 }); break; }
       case 'cheer': [523.25, 659.25, 783.99].forEach((n, i) => this.tone({ freq: n, t: now + i * 0.07, type: 'triangle', dur: 0.16, gain: 0.08 })); break;
       case 'bloop': this.tone({ freq: 420, to: 980, dur: 0.12, gain: 0.09 }); this.tone({ freq: 620, to: 1300, t: now + 0.08, dur: 0.09, gain: 0.05 }); break;

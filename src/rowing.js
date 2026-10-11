@@ -6,18 +6,21 @@ const smooth = t => t * t * (3 - 2 * t);
 
 // One regenerated character texture, articulated around its seated hips, shoulders
 // and two grips. One rigid paddle texture is shared by every rendered frame.
+// tools/build-rowing-cycle.py renders the cycle with draw(); the game itself only uses the
+// motion maths (sample, bladePoint), so it builds the rig without images.
 class PaddleRig {
   constructor(body, paddle, data) {
     this.body = body;
     this.paddle = paddle;
     this.data = data;
+    this.vertices = [];
+    this.triangles = [];
+    if (!body) return;
     this.face = document.createElement('canvas');
     this.face.width = body.width;
     this.face.height = body.height;
     this.faceCtx = this.face.getContext('2d');
-    this.vertices = [];
-    this.triangles = [];
-    const columns = 12, rows = 16;
+    const columns = 32, rows = 40;
     for (let y = 0; y <= rows; y++) {
       for (let x = 0; x <= columns; x++) {
         this.vertices.push({ x: body.width * x / columns, y: body.height * y / rows });
@@ -107,6 +110,59 @@ class PaddleRig {
     return this.face;
   }
 
+  mesh(texture, transformed) {
+    if (!this.meshCanvas) {
+      this.meshCanvas = document.createElement('canvas');
+      this.meshCanvas.width = this.meshCanvas.height = 1280;
+      const gl = this.meshCanvas.getContext('webgl', { alpha:true, premultipliedAlpha:true, antialias:false });
+      this.meshGL = gl;
+      if (gl) {
+        const shader = (type, source) => {
+          const sh=gl.createShader(type);gl.shaderSource(sh,source);gl.compileShader(sh);return sh;
+        };
+        const program=gl.createProgram();
+        gl.attachShader(program,shader(gl.VERTEX_SHADER,
+          'attribute vec2 p;attribute vec2 uv;varying vec2 v;void main(){gl_Position=vec4(p.x/640.0-1.0,1.0-p.y/640.0,0,1);v=uv;}'));
+        gl.attachShader(program,shader(gl.FRAGMENT_SHADER,
+          'precision mediump float;varying vec2 v;uniform sampler2D tex;void main(){gl_FragColor=texture2D(tex,v);}'));
+        gl.linkProgram(program);gl.useProgram(program);
+        this.meshBuffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.meshBuffer);
+        for(const [name,offset] of [['p',0],['uv',8]]) {
+          const loc=gl.getAttribLocation(program,name);gl.enableVertexAttribArray(loc);
+          gl.vertexAttribPointer(loc,2,gl.FLOAT,false,16,offset);
+        }
+        gl.bindTexture(gl.TEXTURE_2D,gl.createTexture());
+        gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,true);
+        this.meshData=new Float32Array(this.triangles.length*12);
+      }
+    }
+    const gl=this.meshGL;
+    if (!gl || gl.isContextLost()) return null;
+    let n=0;
+    for(const triangle of this.triangles) for(const i of triangle) {
+      const p=transformed[i],uv=this.vertices[i];
+      this.meshData[n++]=p.x;this.meshData[n++]=p.y;
+      this.meshData[n++]=uv.x/texture.width;this.meshData[n++]=uv.y/texture.height;
+    }
+    gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.bufferData(gl.ARRAY_BUFFER,this.meshData,gl.DYNAMIC_DRAW);
+    try {
+      gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,texture);
+    } catch (error) {
+      // Local file previews can have opaque origins; keep the Canvas fallback usable.
+      if (error.name !== 'SecurityError') throw error;
+      this.meshGL = null;
+      return null;
+    }
+    // Shared edges are rasterized once: no independent antialiased clip seams.
+    gl.drawArrays(gl.TRIANGLES,0,this.triangles.length*3);
+    return this.meshCanvas;
+  }
+
   triangle(ctx, texture, source, dest) {
     const [p,q,r] = source, [a,b,c] = dest;
     const det = (q.x-p.x)*(r.y-p.y)-(r.x-p.x)*(q.y-p.y);
@@ -120,7 +176,7 @@ class PaddleRig {
     ctx.beginPath();
     for (const [i,v] of dest.entries()) {
       const length=Math.hypot(v.x-mx,v.y-my)||1;
-      const x=v.x+(v.x-mx)/length*.35, y=v.y+(v.y-my)/length*.35;
+      const x=v.x+(v.x-mx)/length*2, y=v.y+(v.y-my)/length*2;
       if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
     }
     ctx.closePath();ctx.clip();
@@ -136,7 +192,9 @@ class PaddleRig {
     ctx.drawImage(this.paddle,-d.paddle.pivot[0],-d.paddle.pivot[1]);ctx.restore();
     const texture = this.texture(motion);
     const transformed = this.vertices.map(p => this.deform(p,motion));
-    for (const indices of this.triangles) {
+    const mesh=this.mesh(texture,transformed);
+    if (mesh) ctx.drawImage(mesh,0,0);
+    else for (const indices of this.triangles) {
       this.triangle(ctx,texture,indices.map(i=>this.vertices[i]),indices.map(i=>transformed[i]));
     }
     return motion;

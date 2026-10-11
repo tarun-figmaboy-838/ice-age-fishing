@@ -2,3 +2,6 @@ asset/
 tools/
 README.md
 .DS_Store
+.env
+.env.*
+assets/sprites/paddling/

@@ -40,6 +40,8 @@ class Game {
     this.raftRippleIn = 1;
     this.dialogue = null;
     this.leaper = null;
+    this.swiftee = null;
+    this.awaitingNext = false;
     this.ambient = [];
     this.hop = null;
     this.mark = null;
@@ -92,10 +94,18 @@ class Game {
   }
 
   restart() {
+    this.reset();
+    this.tutorialPending = true;
+    opening(this);
+  }
+
+  // Cancels every sequence and clears the scene back to the first location, ready to play.
+  reset() {
     newToken();
     clock.cancelAll();
     this.fx.clearTransient();
     this.audio.stopEffects();
+    this.audio.stopVoice();
     this.audio.setTravel(false);
     this.instructionRevert = 0;
     this.transition = null;
@@ -117,9 +127,13 @@ class Game {
     this.fishFade = 1;
     this.endLine();
     this.leaper = null;
+    this.swiftee = null;
+    this.awaitingNext = false;
+    this.ui.hideNext();
+    this.ui.setInstruction('');
+    this.ui.el.hud.inert = false;
+    this.nextNudge = 3;
     this.applyLocation();
-    this.tutorialPending = true;
-    opening(this);
   }
 
   dispose() {
@@ -216,6 +230,12 @@ class Game {
     }
     state.phase = PHASE.READY;
     this.ui.setHitsEnabled(true);
+    this.speakInstruction();
+  }
+
+  // Reads the instruction aloud (when it has a recording) for children who can't read it yet.
+  speakInstruction() {
+    if (!this.dialogue) this.audio.speak('narrator', this.challengeText());
   }
 
   nextChallenge() {
@@ -232,11 +252,22 @@ class Game {
     }
   }
 
+  // Next, after Swiftee's line, closes the story and opens the summary.
+  next() {
+    if (!this.awaitingNext || state.paused) return;
+    this.awaitingNext = false;
+    if (this.swiftee) this.swiftee.onDownstroke = null;
+    this.ui.hideNext();
+    this.endLine(false);
+    this.complete();
+  }
+
   complete() {
     state.phase = PHASE.COMPLETE;
     this.ui.setHitsEnabled(false);
-    this.ui.setInstruction('Great fishing, Popo!');
+    this.ui.setInstruction(''); // the summary card says it
     this.audio.play('complete');
+    this.audio.speak('narrator', 'Great fishing, Popo!');
     this.ui.showSummary([...state.discovered]);
   }
 
@@ -350,6 +381,7 @@ class Game {
     if (state.paused || state.phase !== PHASE.READY || state.selectedFish || fish.gone || fish.escaping) return;
     state.selectedFish = fish;
     state.idleTime = 0;
+    for (const f of state.fish) if (f !== fish) f.frozen = false;
     this.clearHint();
     this.puffFrom(fish, 4, true);
     this.instructionRevert = 0;
@@ -378,6 +410,8 @@ class Game {
     if (state.phase === PHASE.INTRO || state.phase === PHASE.COMPLETE) return;
     state.paused = !state.paused;
     this.ui.showPause(state.paused);
+    this.ui.el.hud.inert = state.paused; // nothing behind the pause card can be pressed
+    if (!state.paused) this.ui.el.pause.focus({ preventScroll: true });
     if (state.paused) this.audio.suspend();
     else this.audio.resume();
     if (!state.paused) this.lastFrame = performance.now();
@@ -393,6 +427,9 @@ class Game {
   resize() {
     this.stage.resize();
     this.ui.setScale(this.stage.scale);
+    // keep the bubble and the hint hand on their targets even while paused
+    if (this.dialogue && this.dialogue.who !== 'narrator') this.placeSpeech();
+    if (this.handFish && !this.handFish.gone) this.ui.moveHand(this.handFish.x + 10, this.handFish.y + this.handFish.h * 0.3);
     this.ui.showRotateHint(this.stage.portrait);
     this.syncWaterCanvas();
   }
@@ -441,6 +478,7 @@ class Game {
       if (target) target.hinted = true;
       this.ui.pulseTarget();
       this.audio.play('hint');
+      this.speakInstruction();
     }
     if (state.idleTime > HINT_DELAY + 3) {
       this.clearHint();
@@ -477,26 +515,57 @@ class Game {
 
   // Shows one story line word by word, with comic pauses after punctuation and a boing on
   // *stressed* words. A line's cue fires when its word appears (or when a tap skips ahead).
-  // Resolves once the line has been on screen long enough to read.
+  // Resolves once the line has been on screen long enough to read; a `stay` line then remains
+  // on screen until endLine().
   say(line, token) {
     return new Promise((resolve, reject) => {
       if (this.dialogue) this.endLine();
       const words = line.text.split(' ').map((raw) => ({ text: raw.replace(/\*/g, ''), em: raw.includes('*') }));
       const narrator = line.who === 'narrator';
       this.dialogue = {
-        words, who: line.who, cue: line.cue, cueDone: false, token, resolve, reject,
+        words, who: line.who, cue: line.cue, cueDone: false, token, resolve, reject, stay: !!line.stay, settled: false,
         next: 0, wait: 0, held: 0,
         pace: narrator ? 0.21 : 0.17,
         hold: (narrator ? 1000 : 700) + line.text.length * (narrator ? 26 : 22),
       };
       this.ui.showLine(line.who, words);
       this.placeSpeech();
-      if (narrator) this.audio.play('narrate');
+      const voiced = this.audio.speak(line.who, line.text);
+      if (voiced) this.paceToVoice(this.dialogue, voiced);
+      else if (narrator) this.audio.play('narrate');
     });
   }
 
+  // Spreads the words over the recording by length, with a beat after punctuation, so each
+  // word appears as it's spoken. The bubble stays up a moment after the voice finishes.
+  paceToVoice(d, seconds) {
+    const weight = (w) => Math.max(2, w.text.replace(/[^a-z0-9']/gi, '').length)
+      + (w.text.endsWith('…') ? 5 : /[.!?]$/.test(w.text) ? 3 : w.text.endsWith(',') ? 2 : 0);
+    const total = d.words.reduce((sum, w) => sum + weight(w), 0);
+    let at = 0;
+    d.times = d.words.map((w) => {
+      const t = (at / total) * seconds * 0.88;
+      at += weight(w);
+      return t;
+    });
+    d.elapsed = 0;
+    d.voiced = true;
+    d.hold = Math.max(450, (seconds - d.times[d.times.length - 1]) * 1000 + 550);
+  }
+
   placeSpeech() {
+    const bird = this.dialogue && this.dialogue.who === 'swiftee' && this.swiftee;
+    if (bird) {
+      const h = bird.head();
+      this.ui.placeSpeech(h.x, h.y);
+      return;
+    }
     const p = this.popo;
+    if (p.mishap) {
+      const head = p.bodyLandmark('head');
+      this.ui.placeSpeech(head.x + 38, head.y - 63);
+      return;
+    }
     this.ui.placeSpeech(p.anchor.x + 78 + p.travelShift, p.anchor.y - 238 + p.bob);
   }
 
@@ -504,6 +573,7 @@ class Game {
     const dialogue = this.dialogue;
     this.dialogue = null;
     this.ui.hideLines();
+    if (dialogue && dialogue.voiced && cancelled) this.audio.stopVoice();
     if (dialogue) {
       if (cancelled) dialogue.reject(new Cancelled());
       else dialogue.resolve();
@@ -514,8 +584,9 @@ class Game {
     const i = d.next;
     const word = d.words[i];
     this.ui.revealWord(i, word.em);
-    if (!quiet) {
-      try { this.audio.play(word.em ? 'boing' : d.who === 'popo' ? 'talk' : 'word'); }
+    const cued = d.cue && !d.cueDone && d.cue.word <= i;
+    if (!quiet && !cued) {
+      try { this.audio.play(word.em ? 'boing' : ({ popo: 'talk', swiftee: 'chirp' })[d.who] || 'word'); }
       catch (e) { /* Optional audio must not stall dialogue or retain input locks. */ }
     }
     if (d.cue && !d.cueDone && d.cue.word <= i) {
@@ -529,10 +600,10 @@ class Game {
 
   skipDialogue() {
     const d = this.dialogue;
-    if (!d) return false;
+    if (!d || d.settled) return false;
     if (d.next < d.words.length) {
       while (d.next < d.words.length) this.revealWord(d, true);
-    } else {
+    } else if (d.held >= 600) {
       d.held = d.hold;
     }
     return true;
@@ -546,16 +617,25 @@ class Game {
       return;
     }
     if (d.next < d.words.length) {
-      d.wait -= dt;
-      while (d.wait <= 0 && d.next < d.words.length) this.revealWord(d, false);
+      if (d.voiced) {
+        d.elapsed += dt;
+        while (d.next < d.words.length && d.elapsed >= d.times[d.next]) this.revealWord(d, true);
+      } else {
+        d.wait -= dt;
+        while (d.wait <= 0 && d.next < d.words.length) this.revealWord(d, false);
+      }
     } else {
       d.held += dt * 1000;
-      if (d.held >= d.hold) {
+      if (d.held >= d.hold && !d.stay) {
         this.endLine(false);
         return;
       }
+      if (d.held >= d.hold && !d.settled) {
+        d.settled = true;
+        d.resolve();
+      }
     }
-    if (d.who === 'popo') this.placeSpeech();
+    if (d.who !== 'narrator') this.placeSpeech();
   }
 
   // Moments in the scene that a story line can trigger on one of its words.
@@ -571,6 +651,10 @@ class Game {
       this.audio.play('hmm');
     } else if (name === 'fishIn') {
       this.fishIn();
+    } else if (name === 'twirl' && this.swiftee) {
+      if (!this.fx.reduced) this.swiftee.twirl();
+      this.fx.sparkle(this.swiftee.x, this.swiftee.y - 40, 8);
+      this.audio.play('boing');
     }
   }
 
@@ -619,12 +703,13 @@ class Game {
   drawMark(ctx) {
     const m = this.mark;
     if (!m) return;
-    const p = this.popo;
+    const head = this.popo.headTop();
     const grow = m.t < 0.25 ? 1 + 2.2 * (m.t / 0.25 - 1) ** 3 + 1.2 * (m.t / 0.25 - 1) ** 2 : 1;
     const alpha = m.t > 1.6 ? Math.max(0, 1 - (m.t - 1.6) / 0.3) : 1;
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.translate(p.anchor.x - 30, p.anchor.y - 268 + p.bob - Math.min(1, m.t / 0.25) * 12);
+    // pops up from just above Popo's head
+    ctx.translate(head.x, head.y - 14 - Math.min(1, m.t / 0.25) * 12);
     ctx.rotate(Math.sin(m.t * 12) * 0.16 * Math.exp(-m.t * 2.5));
     ctx.scale(grow, grow);
     ctx.font = '900 86px "Arial Rounded MT Bold", "Nunito", system-ui, sans-serif';
@@ -803,6 +888,15 @@ class Game {
     this.fx.update(dt);
     this.popo.waterResponse = this.fx.raftResponse(this.popo.anchor.x);
     this.rideWaves(dt);
+    if (this.swiftee) this.swiftee.update(dt);
+    if (this.awaitingNext && this.swiftee) {
+      this.nextNudge = (this.nextNudge || 3) - dt;
+      if (this.nextNudge <= 0) {
+        this.nextNudge = 3.4;
+        this.swiftee.hop();
+        this.audio.play('chirp');
+      }
+    }
     this.updateDialogue(dt);
     this.updateStoryFx(dt);
     this.watchFrameRate(dt);
@@ -1025,6 +1119,7 @@ class Game {
     this.popo.draw(ctx);
     this.drawMark(ctx);
     this.drawRaftWater(ctx);
+    if (this.swiftee) this.swiftee.draw(ctx);
     this.fx.drawFront(ctx);
     if (this.titleFade > 0) this.drawTitle(ctx, this.titleFade);
     this.ui.syncHits(state.fish);

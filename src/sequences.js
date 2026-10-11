@@ -1,6 +1,6 @@
 (function (PopoGame) {
 'use strict';
-const { clock, ease, Cancelled, state, PHASE, newToken, isCurrent, getShape, Fish, STORY, STAGE_W } = PopoGame;
+const { clock, ease, Cancelled, state, PHASE, newToken, isCurrent, getShape, Fish, Swiftee, STORY, STAGE_W } = PopoGame;
 
 // The hook hangs this far below the line's end.
 const HOOK_DROP = 11;
@@ -111,7 +111,11 @@ async function correctCatch(game, fish) {
     audio.duck(2200);
     audio.play('success');
     ui.showReward(fish.shape);
-    await clock.wait(3800, token);
+    // in a catch-them-all challenge the prize is quicker while more are still swimming
+    const more = game.currentChallenge().all && game.remainingTargets().length > 0;
+    await clock.wait(450, token);
+    audio.speak('narrator', `${fish.shape.name}!`);
+    await clock.wait(more ? 1900 : 3350, token);
     ui.hideReward();
     await clock.wait(400, token);
     game.afterCatch();
@@ -162,11 +166,12 @@ async function wrongCatch(game, fish) {
     const nodes = [
       // Time, lateral offset, vertical offset, body rotation, acting pose.
       [0, 0, 0, 0, 'idle'],
-      [180, 4, 0, .025, 'surprise'],
+      // the quick acting changes snap like a cartoon take; a crossfade would ghost the paws
+      [180, 4, 0, .025, 'surprise', 'cut'],
       [400, 13, -2, .05, 'surprise'],
-      [680, 25, -5, -.055, 'brace'],
+      [680, 25, -5, -.055, 'brace', 'cut'],
       [950, landingX * .47, -12, .13, 'brace'],
-      [1130, landingX * .70, -30, .20, 'slip'],
+      [1130, landingX * .70, -30, .20, 'slip', 'cut'],
       [1450, landingX, 22, .30, 'slip'],
       [1750, landingX + 6, 190, .06, 'surface'],
       [2050, landingX + 3, 191, 0, 'surface'],
@@ -180,7 +185,7 @@ async function wrongCatch(game, fish) {
       [3640, 0, 0, 0, 'climb', null, .16],
       [3720, 92, 0, 0, 'shake', 'cut', -.14],
       [3940, 30, -5, 0, 'shake', null, .05],
-      [4150, 0, 0, 0, 'wet'],
+      [4150, 0, 0, 0, 'wet', 'cut'],
       [4450, 0, -2, -.018, 'wet'],
       [4630, 0, 0, 0, 'idle'],
       [4800, 0, 0, 0, 'idle'],
@@ -228,18 +233,18 @@ async function wrongCatch(game, fish) {
         fx.bubbleBurst(origin.x + landingX, game.waterline + 20); }],
       [2050, () => { state.phase = PHASE.RESURFACING; }],
       [2300, () => { sound('bloop'); fx.ripple(origin.x + landingX, game.waterline, .85); }],
+      [2450, () => {
+        feedback = game.say(STORY.wrong, token);
+        // Attach cancellation handling immediately, even while the motion is running.
+        feedback.catch(() => {});
+      }],
       [2600, () => { fx.drips(popo.bodyLandmark('head')); }],
       [2750, () => { state.phase = PHASE.RECOVERING; }],
       [3080, () => { sound('bloop'); fx.ripple(gripPoint.x + 10, game.waterline, .7); }],
       [3640, () => { sound('splashSmall'); fx.splash(edge - 20, game.waterline, false); }],
       [3720, () => { sound('boing'); fx.drips(popo.bodyLandmark('head')); }],
       [3920, () => { sound('drip'); fx.drips(popo.bodyLandmark('head')); }],
-      [4150, () => {
-        ui.setInstruction(game.wrongText(fish));
-        feedback = game.say(STORY.wrong, token);
-        // Attach cancellation handling immediately, even while the motion is running.
-        feedback.catch(() => {});
-      }],
+      [4150, () => { ui.setInstruction(game.wrongText(fish)); }],
     ];
     await clock.tween(WRONG_DURATION, token, progress => {
       const ms = progress * WRONG_DURATION;
@@ -344,32 +349,35 @@ async function travelTo(game, nextIndex) {
       return;
     }
     if (!isCurrent(token)) return;
-    popo.playFrames('rowing', ['row0', 'row1', 'row2', 'row3', 'row4', 'row5', 'row6', 'row7', 'row8'], 160, true);
     audio.setTravel(true);
     const fromWater = game.waterline;
     const toWater = game.locationWaterline(nextIndex);
     const duration = fx.reduced ? 2400 : 5400;
-    const stroke = 900;
-    let strokes = 0;
+    const stroke = duration / (fx.reduced ? 1 : 3);
+    popo.startRowing(stroke);
+    let lastBlade = popo.paddleTip();
+    let lastSplashStroke = -1;
     let lastWake = 0;
     await clock.tween(duration, token, (t) => {
       const k = ease.inOut(t);
       game.transition.k = k;
       game.setWaterline(fromWater + (toWater - fromWater) * k);
       const elapsed = t * duration;
-      const phase = (elapsed % stroke) / stroke;
+      popo.setRowingTime(elapsed);
       // every pull drives the raft forward and lifts the bow a little; it settles as the blade lifts
-      const surge = Math.max(0, Math.sin(phase * Math.PI * 2 - Math.PI / 2));
+      const surge = popo.rowRig.sample(elapsed, stroke).power;
       const pace = Math.sin(t * Math.PI);
       popo.travelShift = pace * (18 + surge * 24);
       popo.tilt = -pace * (0.012 + surge * 0.014);
-      const cycle = Math.floor(elapsed / stroke);
-      if (cycle > strokes && t < 0.9) {
-        strokes = cycle;
-        const edge = popo.raftRight();
-        fx.splash(edge.x + 36, game.waterline, false);
+      const blade = popo.paddleTip();
+      const strokeIndex = Math.floor(elapsed / stroke);
+      if (strokeIndex !== lastSplashStroke && lastBlade.y < game.waterline && blade.y >= game.waterline) {
+        lastSplashStroke = strokeIndex;
+        const crossing = (game.waterline - lastBlade.y) / (blade.y - lastBlade.y);
+        fx.splash(lastBlade.x + (blade.x - lastBlade.x) * crossing, game.waterline, false);
         audio.play('paddle');
       }
+      lastBlade = blade;
       if (elapsed - lastWake > 380 && t > 0.06 && t < 0.94) {
         lastWake = elapsed;
         const stern = popo.placement(popo.pose.sheet, popo.pose.frame).raftLeftX + popo.travelShift;
@@ -384,6 +392,10 @@ async function travelTo(game, nextIndex) {
     await clock.wait(350, token);
     game.setupChallenge();
   } catch (e) {
+    popo.idle();
+    popo.travelShift = 0;
+    popo.tilt = 0;
+    if (isCurrent(token)) audio.setTravel(false);
     swallow(e);
   }
 }
@@ -396,13 +408,14 @@ async function tutorial(game) {
     ui.setHitsEnabled(false);
     for (const f of state.fish) f.frozen = true;
     ui.setInstruction(game.challengeText());
+    game.speakInstruction();
     await clock.wait(900, token);
     game.showHandOn(state.fish.find((f) => f.key === state.target));
-    await clock.wait(1500, token);
-    for (const f of state.fish) f.frozen = false;
     state.phase = PHASE.READY;
     state.idleTime = 0;
     ui.setHitsEnabled(true);
+    await clock.wait(1500, token);
+    for (const f of state.fish) f.frozen = false;
   } catch (e) {
     swallow(e);
   }
@@ -480,6 +493,7 @@ async function discovery(game) {
     arc.catch(() => {});
     await clock.wait(420, token);
     popo.beginMishap(wl);
+    popo.blendMishapPose('surprise', 'surprise', 0);
     const woah = (async () => { for (const line of story.woah) await game.say(line, token); })();
     woah.catch(() => {});
     await arc;
@@ -493,13 +507,67 @@ async function discovery(game) {
     game.leaper = null;
     await woah;
     popo.endMishap();
-    for (const line of story.after) await game.say(line, token);
-    game.complete();
+    await askAndAnswer(game, token);
   } catch (e) {
     game.leaper = null;
     swallow(e);
   }
 }
 
-Object.assign(PopoGame, { mouthOf, correctCatch, wrongCatch, travelTo, tutorial, opening, discovery });
+// Popo wonders what that was; Swiftee flies in with "Let's find out!"; Next appears.
+async function askAndAnswer(game, token) {
+  for (const line of STORY.ending.after) await game.say(line, token);
+  await swifteeArrives(game, STORY.ending.swiftee, token);
+  await clock.wait(250, token);
+  game.awaitingNext = true;
+  game.ui.showNext();
+  game.audio.play('bloop');
+}
+
+// The end of the story without the leap (for the ?dev=1 screen jumps).
+async function finale(game) {
+  const token = newToken();
+  try {
+    state.phase = PHASE.LEVEL_TRANSITION;
+    game.ui.setHitsEnabled(false);
+    game.ui.setInstruction('');
+    state.fish = [];
+    game.ui.clearHits();
+    await clock.wait(400, token);
+    await askAndAnswer(game, token);
+  } catch (e) {
+    swallow(e);
+  }
+}
+
+// Swiftee swoops in from the right, answers Popo while still in flight, and settles into a
+// hover beside him, facing him.
+async function swifteeArrives(game, line, token) {
+  const { popo, fx, audio } = game;
+  const from = { x: STAGE_W + 140, y: 120 };
+  const to = { x: popo.anchor.x + 360, y: popo.anchor.y - 130 };
+  const bird = new Swiftee(from.x, from.y);
+  bird.onDownstroke = () => audio.play('flap');
+  game.swiftee = bird;
+  audio.play('whoosh');
+  let talking = null;
+  await clock.tween(fx.reduced ? 1200 : 2400, token, (t) => {
+    const k = ease.out(t);
+    bird.x = from.x + (to.x - from.x) * k;
+    // a swoop: dips on the way in and pulls up into the hover
+    bird.y = from.y + (to.y - from.y) * k + Math.sin(k * Math.PI) * 80;
+    bird.lean = 0.32 * (1 - t) ** 1.5;
+    bird.flapRate = 11 + 9 * (1 - t);
+    if (Math.random() < 0.25 * (1 - t)) fx.sparkle(bird.x + 70, bird.y + (Math.random() - 0.5) * 60, 1);
+    if (!talking && t > 0.3) {
+      talking = game.say(line, token);
+      talking.catch(() => {});
+    }
+  });
+  bird.lean = 0;
+  bird.onDownstroke = null;
+  if (talking) await talking;
+}
+
+Object.assign(PopoGame, { mouthOf, correctCatch, wrongCatch, travelTo, tutorial, opening, discovery, finale });
 })(window.PopoGame = window.PopoGame || {});
