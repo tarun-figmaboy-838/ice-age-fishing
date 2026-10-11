@@ -44,22 +44,27 @@ original artwork and tools out of the deployment.
 
 ## Flow
 
-Title banner with a floating play button (fish circle it) → the narrator's opening line →
-Triangle Bay, Pentagon Cove, Hexagon Pass (one catch each, Popo says "Great catch!") → a
-quadrilateral fish leaps out of the water and Popo wonders what it was → Quadrilateral Waters
-(catch all the quadrilateral fish except the trapezium) → summary. Story lines live in `STORY` and the
-`discovery` entry in `src/levels.js`.
+Title banner with a floating play button (fish circle it) → the narrator's opening lines →
+Triangle Bay, Pentagon Cove, Hexagon Pass (one catch each; Popo says "Great catch!" and the
+reward shows the fish and its name) → Quadrilateral Waters (catch all the quadrilateral fish;
+no trapezium) → a trapezium fish Popo has never seen leaps out of the water ("Woah! I haven't
+seen that one before!") → summary. Story lines live in `STORY` in `src/levels.js`.
 
 ## Notes on the supplied art
 
-- Popo's fishing and casting poses come from `asset/popo-fishing-clean.png`: a clean 3x3 sheet
-  of the character and rod only. Each pose is seated on one shared raft prop (cut from the
-  first fishing sheet's idle frame), so the raft never changes between poses. The rowing frames
-  have their painted raft stripped by the build and sit on the same prop.
+- Popo's fishing and casting poses come from `asset/popo-fishing-clean.png` (character and rod
+  only). His paddling comes from `asset/popo-paddling.png`, which the build cleans of red and
+  yellow generation specks and repacks so every figure is whole. Every pose sits on one shared
+  raft at the same seat on the deck, so the raft never changes between poses.
+- The raft with its bucket and the rod come from `asset/props-new.png`; the build fits them into
+  the cells the game registers to. The hint hand is `asset/hint-hand.png`.
 - Fish come from the two fish sheets in `asset/`, sliced by grid cell with a margin so no fish
   is cut, then cleaned of stray specks. The second sheet is drawn at twice the scale and is
   halved. Unused cells: an irregular 9-gon, a capsule, a second right triangle, a second
-  trapezium and a star. Each used fish's side count was checked by measuring its outline.
+  trapezium and a star. Each used fish's side count was checked by measuring its outline, and
+  its smile is measured so the hook lands in its mouth.
+- Each background gets a water mask: the surface waves move only open water, so the sky,
+  mountains, ice shelves and icebergs stay still. The seaweed sway stops at the plant tips.
 - The title banner (`asset/title-banner.png`) and play button (`asset/play-button.png`) are built
   into `assets/` and embedded as data URLs so the canvas can use them from the file system.
 - No audio files were supplied; music and effects are synthesised with the Web Audio API.

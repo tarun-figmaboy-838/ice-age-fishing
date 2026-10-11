@@ -23,18 +23,25 @@ function loadImage(src) {
   });
 }
 
+// Each background comes with a water mask (white where the surface waves may move it).
+const WATER_MASKS = PopoGame.WATER_MASKS || [1, 2, 3, 4].map((n) => `assets/backgrounds/water-${n}.png`);
+
 function preloadBackground(index) {
   if (!pending.has(index)) {
-    pending.set(index, loadImage(BACKGROUNDS[index]).then((img) => {
+    pending.set(index, Promise.all([loadImage(BACKGROUNDS[index]), loadImage(WATER_MASKS[index])]).then(([img, mask]) => {
+      img.waterMask = mask;
       assets.backgrounds[index] = img;
       return img;
+    }, (err) => {
+      pending.delete(index); // let the next attempt try again
+      throw err;
     }));
   }
   return pending.get(index);
 }
 
 async function loadCoreAssets() {
-  const [fishing, rowing, fish, bg0, props, mishapPoses, title, play] = await Promise.all([
+  const [fishing, rowing, fish, bg0, props, mishapPoses, title, play, paddlingBody, paddlingPaddle] = await Promise.all([
     loadImage('assets/sprites/popo-fishing.webp'),
     loadImage('assets/sprites/popo-rowing.webp'),
     loadImage('assets/sprites/fish.webp'),
@@ -43,7 +50,11 @@ async function loadCoreAssets() {
     loadImage('assets/sprites/popo-mishap.png'),
     loadImage(TITLE),
     loadImage(PLAY),
+    loadImage('assets/sprites/paddling/body.png'),
+    loadImage('assets/sprites/paddling/paddle.png'),
   ]);
+  assets.paddlingBody = paddlingBody;
+  assets.paddlingPaddle = paddlingPaddle;
   assets.title = title;
   assets.play = play;
   assets.props = props;
@@ -53,7 +64,7 @@ async function loadCoreAssets() {
     casting: { img: fishing, data: SHEET_DATA.fishing },
     rowing: { img: rowing, data: SHEET_DATA.rowing },
   };
-  assets.fish = { img: fish, boxes: FISH_ATLAS.boxes, width: FISH_ATLAS.width, height: FISH_ATLAS.height };
+  assets.fish = { img: fish, boxes: FISH_ATLAS.boxes, mouths: FISH_ATLAS.mouths, width: FISH_ATLAS.width, height: FISH_ATLAS.height };
   preloadBackground(1);
   return bg0;
 }

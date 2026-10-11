@@ -1,6 +1,6 @@
 (function (PopoGame) {
 'use strict';
-const { assets, preloadBackground, clock, Effects, WaterScene, surfaceWave, PAN_OVERLAP, spawnFish, refreshShadows, LOCATIONS, matchesTarget, challengeFish, getShape, Popo, correctCatch, wrongCatch, travelTo, tutorial, opening, discovery, mouthOf, Cancelled, STAGE_W, STAGE_H, swimArea, raftAnchor, state, PHASE, resetProgress, newToken, isCurrent } = PopoGame;
+const { assets, preloadBackground, clock, Effects, WaterScene, surfaceWave, PAN_OVERLAP, spawnFish, refreshShadows, LOCATIONS, STORY, matchesTarget, challengeFish, getShape, Popo, correctCatch, wrongCatch, travelTo, tutorial, opening, discovery, mouthOf, Cancelled, STAGE_W, STAGE_H, swimArea, raftAnchor, state, PHASE, resetProgress, newToken, isCurrent } = PopoGame;
 
 const HINT_DELAY = 4;
 
@@ -96,6 +96,7 @@ class Game {
     clock.cancelAll();
     this.fx.clearTransient();
     this.audio.stopEffects();
+    this.audio.setTravel(false);
     this.instructionRevert = 0;
     this.transition = null;
     this.ui.hideReward();
@@ -125,6 +126,7 @@ class Game {
     this.running = false;
     newToken();
     clock.cancelAll();
+    this.audio.setTravel(false);
     this.transition = null;
     this.handFish = null;
     this.instructionRevert = 0;
@@ -222,9 +224,9 @@ class Game {
     if (state.challengeIndex < loc.challenges.length) {
       this.setupChallenge();
     } else if (state.locationIndex + 1 < LOCATIONS.length) {
-      const next = state.locationIndex + 1;
-      if (LOCATIONS[next].discovery) discovery(this, next);
-      else travelTo(this, next);
+      travelTo(this, state.locationIndex + 1);
+    } else if (STORY.ending) {
+      discovery(this);
     } else {
       this.complete();
     }
@@ -448,9 +450,9 @@ class Game {
   }
 
   // --- travel -----------------------------------------------------------------
-  async prepareTransition(nextIndex) {
+  async prepareTransition(nextIndex, token) {
     await preloadBackground(LOCATIONS[nextIndex].background);
-    this.transition = { from: state.locationIndex, to: nextIndex, k: 0 };
+    if (isCurrent(token)) this.transition = { from: state.locationIndex, to: nextIndex, k: 0 };
   }
 
   finishTransition(nextIndex) {
@@ -465,9 +467,12 @@ class Game {
     if (!this.running) return;
     const dt = Math.min(0.1, Math.max(0, (now - this.lastFrame) / 1000));
     this.lastFrame = now;
-    if (!state.paused && !document.hidden) this.update(dt);
-    this.draw();
-    requestAnimationFrame((t) => this.loop(t));
+    try {
+      if (!state.paused && !document.hidden) this.update(dt);
+      this.draw();
+    } finally {
+      requestAnimationFrame((t) => this.loop(t));
+    }
   }
 
   // Shows one story line word by word, with comic pauses after punctuation and a boing on

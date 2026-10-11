@@ -22,11 +22,11 @@ PopoGame.SHEET_DATA = {
      220,
      385
     ],
+    "bodyArea": 25571,
     "rodTip": [
      532,
      130
-    ],
-    "bodyArea": 25571
+    ]
    },
    {
     "row": 0,
@@ -45,11 +45,11 @@ PopoGame.SHEET_DATA = {
      840,
      383
     ],
+    "bodyArea": 24387,
     "rodTip": [
      1139,
      70
-    ],
-    "bodyArea": 24387
+    ]
    },
    {
     "row": 0,
@@ -68,11 +68,11 @@ PopoGame.SHEET_DATA = {
      1450,
      383
     ],
+    "bodyArea": 24584,
     "rodTip": [
      1726,
      56
-    ],
-    "bodyArea": 24584
+    ]
    },
    {
     "row": 1,
@@ -91,11 +91,11 @@ PopoGame.SHEET_DATA = {
      213,
      822
     ],
+    "bodyArea": 22268,
     "rodTip": [
      43,
      491
-    ],
-    "bodyArea": 22268
+    ]
    },
    {
     "row": 1,
@@ -114,11 +114,11 @@ PopoGame.SHEET_DATA = {
      839,
      818
     ],
+    "bodyArea": 22577,
     "rodTip": [
      1170,
      537
-    ],
-    "bodyArea": 22577
+    ]
    },
    {
     "row": 1,
@@ -137,11 +137,11 @@ PopoGame.SHEET_DATA = {
      1463,
      817
     ],
+    "bodyArea": 22976,
     "rodTip": [
      1753,
      568
-    ],
-    "bodyArea": 22976
+    ]
    },
    {
     "row": 2,
@@ -160,11 +160,11 @@ PopoGame.SHEET_DATA = {
      219,
      1255
     ],
+    "bodyArea": 24226,
     "rodTip": [
      593,
      1003
-    ],
-    "bodyArea": 24226
+    ]
    },
    {
     "row": 2,
@@ -183,11 +183,11 @@ PopoGame.SHEET_DATA = {
      842,
      1254
     ],
+    "bodyArea": 23256,
     "rodTip": [
      1125,
      1012
-    ],
-    "bodyArea": 23256
+    ]
    },
    {
     "row": 2,
@@ -206,172 +206,190 @@ PopoGame.SHEET_DATA = {
      1461,
      1253
     ],
+    "bodyArea": 22826,
     "rodTip": [
      1741,
      946
-    ],
-    "bodyArea": 22826
+    ]
    }
   ]
  },
  "rowing": {
-  "width": 1254,
-  "height": 1254,
+  "width": 1461,
+  "height": 1320,
   "frames": [
    {
     "row": 0,
     "col": 0,
-    "cell": 418,
     "cellX": 0,
     "cellY": 0,
-    "raftLeft": 23,
-    "raftRight": 381,
-    "raftBottom": 371,
-    "bodyArea": 9985,
+    "cellW": 487,
+    "cellH": 440,
     "box": [
-     22,
-     118,
-     383,
-     378
-    ]
+     49,
+     28,
+     437,
+     412
+    ],
+    "seat": [
+     186,
+     391
+    ],
+    "bodyArea": 30712
    },
    {
     "row": 0,
     "col": 1,
-    "cell": 418,
-    "cellX": 418,
+    "cellX": 487,
     "cellY": 0,
-    "raftLeft": 440,
-    "raftRight": 822,
-    "raftBottom": 370,
-    "bodyArea": 9479,
+    "cellW": 487,
+    "cellH": 440,
     "box": [
-     440,
-     138,
-     824,
-     392
-    ]
+     515,
+     49,
+     946,
+     412
+    ],
+    "seat": [
+     645,
+     348
+    ],
+    "bodyArea": 31343
    },
    {
     "row": 0,
     "col": 2,
-    "cell": 418,
-    "cellX": 836,
+    "cellX": 974,
     "cellY": 0,
-    "raftLeft": 861,
-    "raftRight": 1227,
-    "raftBottom": 371,
-    "bodyArea": 9890,
+    "cellW": 487,
+    "cellH": 440,
     "box": [
-     860,
-     161,
-     1228,
-     410
-    ]
+     1013,
+     56,
+     1422,
+     412
+    ],
+    "seat": [
+     1160,
+     327
+    ],
+    "bodyArea": 28575
    },
    {
     "row": 1,
     "col": 0,
-    "cell": 418,
     "cellX": 0,
-    "cellY": 418,
-    "raftLeft": 25,
-    "raftRight": 388,
-    "raftBottom": 785,
-    "bodyArea": 10273,
+    "cellY": 440,
+    "cellW": 487,
+    "cellH": 440,
     "box": [
-     24,
-     545,
-     390,
-     796
-    ]
+     31,
+     494,
+     455,
+     852
+    ],
+    "seat": [
+     171,
+     807
+    ],
+    "bodyArea": 30090
    },
    {
     "row": 1,
     "col": 1,
-    "cell": 418,
-    "cellX": 418,
-    "cellY": 418,
-    "raftLeft": 442,
-    "raftRight": 806,
-    "raftBottom": 785,
-    "bodyArea": 9880,
+    "cellX": 487,
+    "cellY": 440,
+    "cellW": 487,
+    "cellH": 440,
     "box": [
-     441,
-     534,
-     806,
-     791
-    ]
+     520,
+     494,
+     940,
+     852
+    ],
+    "seat": [
+     683,
+     793
+    ],
+    "bodyArea": 29326
    },
    {
     "row": 1,
     "col": 2,
-    "cell": 418,
-    "cellX": 836,
-    "cellY": 418,
-    "raftLeft": 863,
-    "raftRight": 1227,
-    "raftBottom": 785,
-    "bodyArea": 10951,
+    "cellX": 974,
+    "cellY": 440,
+    "cellW": 487,
+    "cellH": 440,
     "box": [
-     865,
-     531,
-     1229,
-     791
-    ]
+     1028,
+     527,
+     1406,
+     852
+    ],
+    "seat": [
+     1189,
+     828
+    ],
+    "bodyArea": 28281
    },
    {
     "row": 2,
     "col": 0,
-    "cell": 418,
     "cellX": 0,
-    "cellY": 836,
-    "raftLeft": 25,
-    "raftRight": 387,
-    "raftBottom": 1176,
-    "bodyArea": 10045,
+    "cellY": 880,
+    "cellW": 487,
+    "cellH": 440,
     "box": [
-     24,
-     917,
-     388,
-     1183
-    ]
+     56,
+     930,
+     431,
+     1292
+    ],
+    "seat": [
+     198,
+     1269
+    ],
+    "bodyArea": 29936
    },
    {
     "row": 2,
     "col": 1,
-    "cell": 418,
-    "cellX": 418,
-    "cellY": 836,
-    "raftLeft": 445,
-    "raftRight": 808,
-    "raftBottom": 1177,
-    "bodyArea": 10459,
+    "cellX": 487,
+    "cellY": 880,
+    "cellW": 487,
+    "cellH": 440,
     "box": [
-     444,
-     926,
-     810,
-     1184
-    ]
+     524,
+     948,
+     936,
+     1292
+    ],
+    "seat": [
+     662,
+     1268
+    ],
+    "bodyArea": 29485
    },
    {
     "row": 2,
     "col": 2,
-    "cell": 418,
-    "cellX": 836,
-    "cellY": 836,
-    "raftLeft": 860,
-    "raftRight": 1226,
-    "raftBottom": 1177,
-    "bodyArea": 10311,
+    "cellX": 974,
+    "cellY": 880,
+    "cellW": 487,
+    "cellH": 440,
     "box": [
-     860,
-     917,
-     1227,
-     1184
-    ]
+     1024,
+     925,
+     1410,
+     1292
+    ],
+    "seat": [
+     1169,
+     1269
+    ],
+    "bodyArea": 31543
    }
   ]
  }
 };
-PopoGame.FISH_ATLAS = {"width": 2048, "height": 550, "boxes": {"triangle": [0, 0, 252, 241], "square": [260, 0, 495, 258], "rectangle": [503, 0, 788, 228], "circle": [796, 0, 1056, 256], "rhombus": [1064, 0, 1298, 284], "parallelogram": [1306, 0, 1583, 228], "trapezium": [1591, 0, 1865, 234], "pentagon": [0, 292, 248, 550], "hexagon": [256, 292, 514, 546], "octagon": [522, 292, 761, 542], "nonagon": [769, 292, 1011, 539], "decagon": [1019, 292, 1264, 542], "oval": [1272, 292, 1566, 490], "semicircle": [1574, 292, 1749, 541], "triangle-right": [1757, 292, 2005, 515]}};
+PopoGame.FISH_ATLAS = {"width": 2048, "height": 550, "boxes": {"triangle": [0, 0, 252, 241], "square": [260, 0, 495, 258], "rectangle": [503, 0, 788, 228], "circle": [796, 0, 1056, 256], "rhombus": [1064, 0, 1298, 284], "parallelogram": [1306, 0, 1583, 228], "trapezium": [1591, 0, 1865, 234], "pentagon": [0, 292, 248, 550], "hexagon": [256, 292, 514, 546], "octagon": [522, 292, 761, 542], "nonagon": [769, 292, 1011, 539], "decagon": [1019, 292, 1264, 542], "oval": [1272, 292, 1566, 490], "semicircle": [1574, 292, 1749, 541], "triangle-right": [1757, 292, 2005, 515]}, "mouths": {"triangle": [0.746, 0.651], "square": [0.876, 0.615], "rectangle": [0.894, 0.636], "circle": [0.896, 0.595], "rhombus": [0.829, 0.61], "parallelogram": [0.789, 0.614], "trapezium": [0.795, 0.633], "pentagon": [0.847, 0.61], "hexagon": [0.827, 0.616], "octagon": [0.872, 0.604], "nonagon": [0.859, 0.623], "decagon": [0.886, 0.619], "oval": [0.888, 0.653], "semicircle": [0.874, 0.56], "triangle-right": [0.676, 0.719]}};

@@ -5,22 +5,26 @@ const { assets } = PopoGame;
 const TAU = Math.PI * 2;
 const POPO_SCALE = 1.0;
 
-// Frame picks per sheet (row, col). The frames hold only the character and rod or paddle; the
-// raft is the shared prop below, so it never changes size. Fishing and casting poses come from
-// one clean sheet and sit Popo on his seat point; rowing frames register on their own raft.
+// Frame picks per sheet (row, col). The frames hold only the character and his rod or paddle;
+// the raft is the shared prop below, so it never changes size. Every pose sits Popo on his seat
+// point; the scales make him the same size in both sheets (from the measured body area).
+const ROWING = { row0: [0, 0], row1: [0, 1], row2: [0, 2], row3: [1, 0], row4: [1, 1], row5: [1, 2], row6: [2, 0], row7: [2, 1], row8: [2, 2] };
 const SHEETS = {
   fishing: { scale: 0.63, frames: { idle: [0, 1] } },
   casting: { scale: 0.63, frames: { lift: [0, 2], up: [0, 2], back: [1, 0], swing: [1, 1], follow: [1, 2], hold: [2, 2], reel: [2, 0], reel2: [2, 1] } },
-  rowing: { scale: 0.895, frames: { reach: [0, 0], dip: [0, 1], deep: [0, 2], pull: [1, 1], lift: [1, 2], raise: [2, 1] } },
+  rowing: { scale: 0.56, frames: ROWING },
 };
 
 // The raft prop (cell 0 of popo-props) is registered like the idle frame it was cut from:
 // cell point (186, 383) sits on the anchor at scale 0.93. Frames register their own raft's
 // bottom-right corner onto the prop's, which is the steadiest reference in the artwork.
-const PROP = { scale: 0.93, mid: 186, bottom: 383, left: 5, right: 367, bucket: { x: 85, y: 288 } };
+const PROP = { scale: 0.93, mid: 186, bottom: 383, left: 5, right: 367, bucket: { x: 78, y: 290 } };
 const PROP_RIGHT_DX = (PROP.right - PROP.mid) * PROP.scale;
-// Where Popo sits on the raft prop (measured from the idle frame the prop was cut from).
-const SEAT = { dx: (178 - PROP.mid) * PROP.scale, dy: (373 - PROP.bottom) * PROP.scale };
+// Where Popo sits: the back of the raft's deck, clear of the bucket, so he sits on the boat
+// rather than at the water's edge.
+const SEAT = { dx: (196 - PROP.mid) * PROP.scale, dy: (338 - PROP.bottom) * PROP.scale };
+// The wrong-answer reaction was registered on the earlier seat (178, 373); this moves it here.
+const SEAT_SHIFT = { x: 196 - 178, y: 338 - 373 };
 
 // Manually inspected pose extents, torso registrations and attachment landmarks.
 // One atlas-wide scale preserves the generated character's proportions in every pose.
@@ -48,6 +52,7 @@ class Popo {
     this.line = { visible: true, mode: 'dangle', hook: { x: 0, y: 0 }, arc: 0, tension: 0, length: 150 };
     this.swayT = 0;
     this.mishap = null;
+    this.rowing = null;
     this.waterResponse = 0;
     this.waveY = 0;
     this.waveAngle = 0;
@@ -74,10 +79,12 @@ class Popo {
   }
 
   stopFrames() {
+    this.rowing = null;
     this.anim = null;
   }
 
   idle() {
+    this.rowing = null;
     this.anim = null;
     this.setPose('fishing', 'idle', 140);
   }
@@ -120,10 +127,10 @@ class Popo {
     const s = SHEETS[sheet].scale * POPO_SCALE;
     const [bx0, by0, bx1, by1] = f.box;
     const rightX = this.anchor.x + PROP_RIGHT_DX;
-    // a frame's reference point in the sheet, and where it lands on stage
-    const [rx, ry, ox, oy] = f.seat
-      ? [f.seat[0], f.seat[1], this.anchor.x + SEAT.dx, this.anchor.y + SEAT.dy]
-      : [f.raftRight, f.raftBottom, rightX, this.anchor.y];
+    // every pose lands its seat point on the raft's seat
+    const [rx, ry] = f.seat;
+    const ox = this.anchor.x + SEAT.dx;
+    const oy = this.anchor.y + SEAT.dy;
     return {
       img: assets.sheets[sheet].img,
       sx: bx0, sy: by0, sw: bx1 - bx0, sh: by1 - by0,
@@ -165,6 +172,7 @@ class Popo {
   }
 
   rodTip() {
+    if (this.rowing) return null;
     if (this.mishap) return this.mishapRodPoint(1139, 70);
     const cur = this.placement(this.pose.sheet, this.pose.frame).tip;
     let tip = cur;
@@ -187,6 +195,7 @@ class Popo {
 
   draw(ctx) {
     if (this.mishap) { this.drawMishap(ctx); return; }
+    if (this.rowing) { this.drawRowing(ctx); return; }
     ctx.save();
     this.applyTransform(ctx);
     this.drawRaftProp(ctx);
@@ -197,6 +206,54 @@ class Popo {
       this.drawPose(ctx, this.pose, 1);
     }
     ctx.restore();
+  }
+
+  startRowing(cycleMs = 2100) {
+    this.stopFrames();
+    this.setPose('fishing', 'idle', 0);
+    this.rowRig = this.rowRig || new PopoGame.PaddleRig(assets.paddlingBody, assets.paddlingPaddle, PopoGame.ROWING_RIG);
+    this.rowing = { time: 0, cycleMs };
+    if (!this.rowCanvas) {
+      this.rowCanvas = document.createElement('canvas');
+      this.rowCanvas.width = this.rowCanvas.height = 1280;
+    }
+    this.rowCacheTime = null;
+  }
+
+  setRowingTime(time) {
+    if (this.rowing) this.rowing.time = time;
+  }
+
+  paddleTip() {
+    if (!this.rowing) return null;
+    const d = PopoGame.ROWING_RIG;
+    const tip = this.rowRig.bladePoint(this.rowing.time, this.rowing.cycleMs);
+    return this.transformPoint(this.anchor.x + SEAT.dx + (tip.x-d.seat[0])*d.worldScale,
+      this.anchor.y + SEAT.dy + (tip.y-d.seat[1])*d.worldScale);
+  }
+
+  drawRowing(ctx) {
+    const d = PopoGame.ROWING_RIG, r = this.rowing;
+    if (this.rowCacheTime !== r.time) {
+      const g = this.rowCanvas.getContext('2d');
+      g.clearRect(0,0,1280,1280);
+      g.save();g.translate(...d.frameOrigin);this.rowRig.draw(g,r.time,r.cycleMs);g.restore();
+      this.rowCacheTime = r.time;
+    }
+    const drawFigure = () => {
+      ctx.save();this.applyTransform(ctx);
+      ctx.drawImage(this.rowCanvas,
+        this.anchor.x+SEAT.dx-(d.seat[0]+d.frameOrigin[0])*d.worldScale,
+        this.anchor.y+SEAT.dy-(d.seat[1]+d.frameOrigin[1])*d.worldScale,
+        1280*d.worldScale,1280*d.worldScale);
+      ctx.restore();
+    };
+    const waterline = this.anchor.y-12;
+    // Actual world waterline clipping: the blade enters water without losing length.
+    ctx.save();ctx.beginPath();ctx.rect(0,waterline,PopoGame.STAGE_W,PopoGame.STAGE_H);ctx.clip();
+    ctx.globalAlpha=.54;ctx.filter='sepia(.25) hue-rotate(140deg) saturate(1.15)';drawFigure();ctx.restore();
+    ctx.save();this.applyTransform(ctx);this.drawRaftProp(ctx);ctx.restore();
+    ctx.save();ctx.beginPath();ctx.rect(0,0,PopoGame.STAGE_W,waterline);ctx.clip();drawFigure();ctx.restore();
   }
 
   drawPose(ctx, pose, alpha) {
@@ -253,7 +310,8 @@ class Popo {
 
   mishapBodyPoint(x, y) {
     const m = this.mishap;
-    const pivot = this.sourcePoint(178, 300);
+    // the reaction's body frame sits on the same seat as the normal poses (see SEAT)
+    const pivot = this.sourcePoint(178 + SEAT_SHIFT.x, 300 + SEAT_SHIFT.y);
     const dx = (x - 178) * .93, dy = (y - 300) * .93;
     return { x: pivot.x + m.x + dx * Math.cos(m.angle) - dy * Math.sin(m.angle),
       y: pivot.y + m.y + dx * Math.sin(m.angle) + dy * Math.cos(m.angle) };
@@ -303,6 +361,11 @@ class Popo {
     const origin = this.mishapBodyPoint(178,300);
     ctx.save();
     ctx.translate(origin.x,origin.y); ctx.rotate(m.angle);
+    // squash (positive) and stretch (negative) about the body's base
+    if (m.squash) {
+      const base = this.poseLocalPoint(m.pose, 'contact').y;
+      ctx.translate(0, base); ctx.scale(1 + m.squash * .5, 1 - m.squash); ctx.translate(0, -base);
+    }
     // Short registered pose blends preserve head position while the lower body
     // settles. World translation and rotation are independent of the sprite atlas.
     if (m.pose === m.nextPose || m.mix === 0 || m.mix === 1) {
@@ -387,6 +450,7 @@ class Popo {
 
   endMishap() {
     this.mishap = null;
+    this.rowing = null;
     this.tilt = this.lean = this.dip = 0;
     this.pose = { sheet: 'fishing', frame: 'idle' };
     this.prevPose = null;

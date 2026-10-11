@@ -92,13 +92,14 @@ class AudioEngine {
   }
 
   suspend() {
-    if (this.ctx && this.ctx.state === 'running') this.ctx.suspend();
+    if (this.ctx && this.ctx.state !== 'closed') this.ctx.suspend();
   }
 
   resume() {
     if (!this.ctx) return;
     if (this.ctx.state !== 'running') this.ctx.resume();
-    this.nextBeat = this.ctx.currentTime + 0.05;
+    // notes are queued a little ahead; don't schedule the same beat twice
+    this.nextBeat = Math.max(this.nextBeat, this.ctx.currentTime + 0.05);
   }
 
   setTravel(on) {

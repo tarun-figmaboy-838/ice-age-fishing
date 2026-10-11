@@ -1,10 +1,18 @@
 (function (PopoGame) {
 'use strict';
-const { clock, ease, Cancelled, state, PHASE, newToken, isCurrent, getShape, Fish, STORY, LOCATIONS, STAGE_W } = PopoGame;
+const { clock, ease, Cancelled, state, PHASE, newToken, isCurrent, getShape, Fish, STORY, STAGE_W } = PopoGame;
 
-// Where the hook grabs a fish: just in front of its mouth.
+// The hook hangs this far below the line's end.
+const HOOK_DROP = 11;
+
+// Where the hook grabs a fish: its smile (measured from the art), mirrored when it swims left,
+// with the line ending just above it so the hook's bend sits in the mouth.
 function mouthOf(fish) {
-  return { x: fish.x + fish.dir * fish.w * 0.4 * fish.scale, y: fish.y + fish.h * 0.08 * fish.scale };
+  const [mx, my] = fish.mouth;
+  return {
+    x: fish.x + fish.dir * (mx - 0.5) * fish.w * fish.scale,
+    y: fish.y + (my - 0.5) * fish.h * fish.scale - HOOK_DROP,
+  };
 }
 
 function swallow(e) {
@@ -126,6 +134,7 @@ async function wrongCatch(game, fish) {
     fish.frozen = false;
     state.selectedFish = null;
     state.idleTime = 0;
+    state.hintShown = false;
     state.phase = PHASE.READY;
     ui.setHitsEnabled(true);
     game.restoreTutorialHand();
@@ -164,9 +173,13 @@ async function wrongCatch(game, fish) {
       [2430, landingX, 63, -.025, 'surface'],
       [2600, landingX - 5, 69, 0, 'blink'],
       [2750, landingX - 12, 68, 0, 'surface'],
-      [3030, landingX - 29, 56, -.03, 'climb'],
-      [3460, landingX - 70, -9, -.12, 'climb'],
-      [3790, landingX * .32, -19, -.045, 'shake'],
+      // swim to the edge, grab it, haul up, belly-slide onto the deck, then pop up to sit
+      [3000, landingX - 40, 64, 0, 'surface'],
+      [3080, 0, 0, 0, 'climb', 'cut'],
+      [3380, 0, 0, 0, 'climb'],
+      [3640, 0, 0, 0, 'climb', null, .16],
+      [3720, 92, 0, 0, 'shake', 'cut', -.14],
+      [3940, 30, -5, 0, 'shake', null, .05],
       [4150, 0, 0, 0, 'wet'],
       [4450, 0, -2, -.018, 'wet'],
       [4630, 0, 0, 0, 'idle'],
@@ -180,15 +193,25 @@ async function wrongCatch(game, fish) {
     nodes[8][2] = underwater + 2;
     const afloat = underwater - 112;
     for (const i of [9, 10, 11, 12]) nodes[i][2] += afloat - 63;
-    // The two climb keys rotate the body around the SAME planted forepaw.
+    // The climb keys place the reaching forepaw: on the raft's edge while hauling up (a small
+    // lift, so the legs come up out of the water rather than swinging high), then further in
+    // on the deck once the belly has slid aboard.
     const gripPoint = { x: edge-5, y: game.waterline-21 };
-    const climbHand = popo.poseLocalPoint('climb','hand');
-    for (const [index,angle] of [[12,-.03],[13,-.58]]) {
-      nodes[index][3]=angle;
-      const theta=angle*rotation;
-      nodes[index][1]=gripPoint.x-origin.x-(climbHand.x*Math.cos(theta)-climbHand.y*Math.sin(theta));
-      nodes[index][2]=gripPoint.y-origin.y-(climbHand.x*Math.sin(theta)+climbHand.y*Math.cos(theta));
-    }
+    // a key that lands one landmark of a pose on a stage point at a given tilt
+    const place = (index, pose, landmark, angle, at) => {
+      const local = popo.poseLocalPoint(pose, landmark);
+      const theta = angle * rotation;
+      nodes[index][3] = angle;
+      nodes[index][1] = at.x - origin.x - (local.x * Math.cos(theta) - local.y * Math.sin(theta));
+      nodes[index][2] = at.y - origin.y - (local.x * Math.sin(theta) + local.y * Math.cos(theta));
+    };
+    place(13, 'climb', 'hand', 0, gripPoint);
+    place(14, 'climb', 'hand', -.2, gripPoint);
+    // belly aboard: the body lies along the back of the deck, clear of the water
+    place(15, 'climb', 'pivot', -.03, { x: edge - 96, y: game.waterline - 57 });
+    // sit up right where the body lies, then scoot back to the seat
+    nodes[16][1] = nodes[15][1] + 14;
+    nodes[17][1] = nodes[15][1] * .45;
     let released = null, hookRelease = null, impacted = false;
     let previousContact = null;
     let eventIndex = 0;
@@ -207,7 +230,10 @@ async function wrongCatch(game, fish) {
       [2300, () => { sound('bloop'); fx.ripple(origin.x + landingX, game.waterline, .85); }],
       [2600, () => { fx.drips(popo.bodyLandmark('head')); }],
       [2750, () => { state.phase = PHASE.RECOVERING; }],
-      [3790, () => { sound('drip'); fx.drips(popo.bodyLandmark('head')); }],
+      [3080, () => { sound('bloop'); fx.ripple(gripPoint.x + 10, game.waterline, .7); }],
+      [3640, () => { sound('splashSmall'); fx.splash(edge - 20, game.waterline, false); }],
+      [3720, () => { sound('boing'); fx.drips(popo.bodyLandmark('head')); }],
+      [3920, () => { sound('drip'); fx.drips(popo.bodyLandmark('head')); }],
       [4150, () => {
         ui.setInstruction(game.wrongText(fish));
         feedback = game.say(STORY.wrong, token);
@@ -232,16 +258,19 @@ async function wrongCatch(game, fish) {
           + (-2*t*t*t+3*t*t)*b[col] + (t*t*t-t*t)*span*vb;
       }
       m.angle *= rotation;
-      const poseMix = a[4] === b[4] ? 0 : ease.inOut(Math.max(0,Math.min(1,(ms-b[0]+110)/110)));
+      // 'cut' switches pose on the key itself (squash and stretch sell the change instead of a
+      // see-through blend); otherwise the last 110 ms before a key blend into its pose
+      const poseMix = a[4] === b[4] || b[5] === 'cut' ? 0 : ease.inOut(Math.max(0,Math.min(1,(ms-b[0]+110)/110)));
       popo.blendMishapPose(a[4], b[4], poseMix);
-      if (ms >= 3030 && ms <= 3460) {
+      m.squash = (a[6] || 0) + ((b[6] || 0) - (a[6] || 0)) * ease.inOut(t);
+      if (ms >= 3080 && ms <= 3380) {
         const paw=popo.bodyLandmark('hand');
         m.x += gripPoint.x-paw.x;
         m.y += gripPoint.y-paw.y;
       }
       m.raftAngle = ms < 1450 ? Math.sin(ms / 1450 * Math.PI) * .012 * rotation : 0;
       m.rodBend = ms < 950 ? Math.sin(ms / 950 * Math.PI) * .06 : 0;
-      m.deckOcclusion = ms > 2750 && ms < 3790;
+      m.deckOcclusion = ms > 2950 && ms < 3720;
       while (eventIndex < events.length && ms >= events[eventIndex][0]) events[eventIndex++][1]();
       if (ms < 950) {
         const k = ease.inOut(Math.min(1, ms / 400));
@@ -305,9 +334,17 @@ async function travelTo(game, nextIndex) {
     state.fish = [];
     ui.clearHits();
 
-    await game.prepareTransition(nextIndex);
+    try {
+      await game.prepareTransition(nextIndex, token);
+    } catch (e) {
+      // the next scenery couldn't load: arrive without the row rather than get stuck
+      if (!isCurrent(token)) return;
+      game.finishTransition(nextIndex);
+      game.setupChallenge();
+      return;
+    }
     if (!isCurrent(token)) return;
-    popo.playFrames('rowing', ['raise', 'reach', 'dip', 'deep', 'pull', 'lift'], 150, true);
+    popo.playFrames('rowing', ['row0', 'row1', 'row2', 'row3', 'row4', 'row5', 'row6', 'row7', 'row8'], 160, true);
     audio.setTravel(true);
     const fromWater = game.waterline;
     const toWater = game.locationWaterline(nextIndex);
@@ -389,12 +426,12 @@ async function opening(game) {
   }
 }
 
-// A fish Popo has never seen races in, leaps out of the water and dives away; Popo wonders
-// about it, then rows off to find out.
-async function discovery(game, nextIndex) {
+// After the last level: a fish Popo has never seen races in, leaps out of the water and dives
+// away; Popo wonders about it, and the journey's summary follows.
+async function discovery(game) {
   const token = newToken();
   const { popo, fx, audio, ui } = game;
-  const story = LOCATIONS[nextIndex].discovery;
+  const story = STORY.ending;
   try {
     state.phase = PHASE.LEVEL_TRANSITION;
     ui.setHitsEnabled(false);
@@ -440,6 +477,7 @@ async function discovery(game, nextIndex) {
         audio.play('splashBig');
       }
     });
+    arc.catch(() => {});
     await clock.wait(420, token);
     popo.beginMishap(wl);
     const woah = (async () => { for (const line of story.woah) await game.say(line, token); })();
@@ -456,7 +494,7 @@ async function discovery(game, nextIndex) {
     await woah;
     popo.endMishap();
     for (const line of story.after) await game.say(line, token);
-    travelTo(game, nextIndex);
+    game.complete();
   } catch (e) {
     game.leaper = null;
     swallow(e);

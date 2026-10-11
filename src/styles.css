@@ -81,16 +81,18 @@ html, body {
   position: absolute;
   left: 0;
   top: 0;
-  width: 9em;
-  height: 9em;
+  width: 7.5em;
+  height: auto;
   pointer-events: none;
-  filter: drop-shadow(0 0.4em 0.6em rgba(0, 0, 0, 0.35));
+  filter: drop-shadow(0 0.4em 0.6em rgba(0, 0, 0, 0.3));
   animation: hand-tap 1.1s ease-in-out infinite;
-  transform-origin: 20% 20%;
 }
-.hand svg { transform: rotate(-20deg); }
+.hand[hidden] { display: none; }
+/* the fingertip is the image's top-left corner, so tapping moves along the finger */
 @keyframes hand-tap {
-  0%, 100% { margin-top: 0; }
+  0%, 100% { margin: 0; }
+  50% { margin: 1.1em 0 0 1.1em; }
+}
   50% { margin-top: -1.6em; }
 }
 
@@ -159,6 +161,9 @@ html, body {
 
 /* ---------- story: Popo's speech bubble and the narrator's caption ---------- */
 .speech, .caption { position: absolute; pointer-events: none; z-index: 3; }
+.overlay.reward { z-index: 4; }
+.hud { z-index: 5; }
+.overlay.pause, .overlay.summary { z-index: 6; }
 .speech[hidden], .caption[hidden] { display: none; }
 .line .w { display: inline-block; visibility: hidden; white-space: pre; }
 .line .w.in { visibility: visible; animation: word-in 0.32s cubic-bezier(0.2, 1.8, 0.4, 1); }
@@ -363,17 +368,6 @@ html, body {
   color: #fff;
   text-shadow: 0 0.06em 0 rgba(120, 60, 0, 0.5), 0 0.4em 1em rgba(0, 0, 0, 0.4);
 }
-.reward-fact {
-  margin: 0 auto 1.4em;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3em;
-  font-size: 2.5em;
-  color: #fff;
-  text-shadow: 0 0.1em 0.5em rgba(0, 0, 0, 0.5);
-}
-.reward-fact span { font-weight: 800; }
-.reward-fact em { font-style: normal; font-size: 0.78em; opacity: 0.9; margin-top: 0.3em; }
 
 /* summary */
 .summary-sub { font-size: 2.3em; margin: 0 0 1em; color: #ffe8bd; }

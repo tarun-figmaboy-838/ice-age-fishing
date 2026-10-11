@@ -3,13 +3,14 @@
 const { assets, getShape, STAGE_W } = PopoGame;
 
 const TAU = Math.PI * 2;
-const FISH_SCALE = 0.45;
+const FISH_SCALE = 0.58;
 
 class Fish {
   constructor(key, x, y, dir, sizeScale = 1) {
     this.key = key;
     this.shape = getShape(key);
     this.box = assets.fish.boxes[this.shape.atlas];
+    this.mouth = assets.fish.mouths[this.shape.atlas];
     this.w = (this.box[2] - this.box[0]) * FISH_SCALE * sizeScale;
     this.h = (this.box[3] - this.box[1]) * FISH_SCALE * sizeScale;
     this.x = x;

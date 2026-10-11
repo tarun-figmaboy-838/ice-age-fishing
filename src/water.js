@@ -46,12 +46,14 @@ uniform float uMix;
 uniform float uAmp;
 uniform float uSurface;
 uniform vec4 uPlants[8];
+uniform sampler2D uMaskFrom;
+uniform sampler2D uMaskTo;
 
-vec2 displace(vec2 p) {
+vec2 displace(vec2 p, float open) {
   float t = uTime;
   vec2 d = vec2(0.0);
   // rolling waves across the painted surface band
-  float s = uSurface * smoothstep(uWater - 75.0, uWater - 25.0, p.y) * (1.0 - smoothstep(uWater + 8.0, uWater + 40.0, p.y));
+  float s = open * uSurface * smoothstep(uWater - 75.0, uWater - 25.0, p.y) * (1.0 - smoothstep(uWater + 8.0, uWater + 40.0, p.y));
   d.y += s * (${WAVE_GLSL});
   d.x += s * (4.5 * sin(t * 0.33) + 1.8 * sin(p.x * 0.02 - t * 0.7));
   // refraction below the surface, stronger with depth
@@ -64,7 +66,8 @@ vec2 displace(vec2 p) {
     vec4 pl = uPlants[i];
     if (pl.y <= pl.x) continue;
     float inside = smoothstep(pl.x - 6.0, pl.x + 10.0, p.x) * (1.0 - smoothstep(pl.y - 10.0, pl.y + 6.0, p.x));
-    float h = clamp((pl.w - p.y) / max(1.0, pl.w - pl.z), 0.0, 1.0);
+    // bends grow toward the plant's tip and stop just above it, so the water and sky above stay put
+    float h = clamp((pl.w - p.y) / max(1.0, pl.w - pl.z), 0.0, 1.0) * smoothstep(pl.z - 36.0, pl.z, p.y);
     float bend = h * h * (7.0 * sin(t * 0.9 + pl.x * 0.013) + 2.6 * sin(t * 1.7 + p.y * 0.05 + pl.x));
     d.x += inside * bend;
   }
@@ -77,16 +80,25 @@ vec3 painting(sampler2D tex, vec2 q) {
   return texture2D(tex, clamp(uv, 0.0, 1.0)).rgb;
 }
 
+// 1 over open water, 0 over the shoreline ice and land (see the water masks)
+float openWater(sampler2D mask, vec2 at) {
+  vec2 uv = at / uStage;
+  uv.x = 1.0 - abs(1.0 - mod(uv.x, 2.0));
+  return texture2D(mask, clamp(uv, 0.0, 1.0)).r;
+}
+
 void main() {
   vec2 p = vUv * uStage;
-  vec2 q = p + displace(p);
+  float pan = uStage.x - ${OVERLAP.toFixed(1)};
+  float oxFrom = -uMix * pan;
+  float oxTo = oxFrom + pan;
+  float open = openWater(uMaskFrom, p - vec2(oxFrom, 0.0));
+  if (uMix > 0.0) open = mix(open, openWater(uMaskTo, p - vec2(oxTo, 0.0)), smoothstep(oxTo, oxTo + ${OVERLAP.toFixed(1)}, p.x));
+  vec2 q = p + displace(p, open);
   vec3 color;
   if (uMix <= 0.0) {
     color = painting(uFrom, q);
   } else {
-    float pan = uStage.x - ${OVERLAP.toFixed(1)};
-    float oxFrom = -uMix * pan;
-    float oxTo = oxFrom + pan;
     vec3 from = painting(uFrom, q - vec2(oxFrom, 0.0));
     vec3 to = painting(uTo, q - vec2(oxTo, 0.0));
     float across = smoothstep(oxTo, oxTo + ${OVERLAP.toFixed(1)}, q.x);
@@ -109,7 +121,7 @@ void main() {
   float shimmer = under * 0.03 * sin(p.x * 0.006 + t * 0.4 + p.y * 0.004);
   float ss = uSurface * smoothstep(uWater - 60.0, uWater - 20.0, p.y) * (1.0 - smoothstep(uWater + 4.0, uWater + 30.0, p.y));
   float glint = max(0.0, sin(p.x * 0.013 + t * 1.25)) * max(0.0, sin(p.x * 0.051 + t * 2.0));
-  float sparkle = ss * 0.22 * glint * glint;
+  float sparkle = open * ss * 0.22 * glint * glint;
   color = color * (1.0 + shimmer * uAmp) + vec3(0.75, 0.93, 1.0) * (caustic + rays + sparkle) * uAmp;
   gl_FragColor = vec4(color, 1.0);
 }`;
@@ -138,14 +150,17 @@ class WaterScene {
     gl.enableVertexAttribArray(aPos);
     gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
     this.u = {};
-    for (const name of ['uFrom', 'uTo', 'uStage', 'uTime', 'uWater', 'uSeabed', 'uMix', 'uAmp', 'uSurface', 'uPlants']) {
+    for (const name of ['uFrom', 'uTo', 'uStage', 'uTime', 'uWater', 'uSeabed', 'uMix', 'uAmp', 'uSurface', 'uPlants', 'uMaskFrom', 'uMaskTo']) {
       this.u[name] = gl.getUniformLocation(this.program, name);
     }
     gl.uniform1i(this.u.uFrom, 0);
     gl.uniform1i(this.u.uTo, 1);
+    gl.uniform1i(this.u.uMaskFrom, 2);
+    gl.uniform1i(this.u.uMaskTo, 3);
     gl.uniform2f(this.u.uStage, STAGE_W, STAGE_H);
     gl.uniform1f(this.u.uSeabed, SEABED_Y);
     this.textures = new Map();
+    this.whiteTex = null;
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
   }
 
@@ -207,6 +222,15 @@ class WaterScene {
 
   // from/to are background images; mix is the row progress (0 when not travelling).
   // surface 0 keeps the band around the waterline still (for art with things on the surface).
+  white() {
+    if (this.whiteTex) return this.whiteTex;
+    const gl = this.gl;
+    this.whiteTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.whiteTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 1, 1, 0, gl.RGB, gl.UNSIGNED_BYTE, new Uint8Array([255, 255, 255]));
+    return this.whiteTex;
+  }
+
   render({ from, to, mix, time, waterline, plants, amplitude, surface = 1, seabed = SEABED_Y }) {
     const gl = this.gl;
     const fromTex = this.texture(from);
@@ -217,6 +241,13 @@ class WaterScene {
     gl.bindTexture(gl.TEXTURE_2D, fromTex);
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, toTex);
+    // no mask (the title banner) means the waves may move everything they reach
+    const maskFrom = from.waterMask ? this.texture(from.waterMask) : this.white();
+    const maskTo = (to || from).waterMask ? this.texture((to || from).waterMask) : maskFrom;
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, maskFrom);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, maskTo);
     gl.uniform1f(this.u.uTime, time);
     gl.uniform1f(this.u.uWater, waterline);
     gl.uniform1f(this.u.uMix, mix);

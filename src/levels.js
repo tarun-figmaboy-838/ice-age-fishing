@@ -13,34 +13,25 @@ const TERMS = {
 // never produces wrong feedback. The taught name is `shape`.
 const SHAPES = {
   triangle: { shape: 'triangle', name: 'Triangle', atlas: 'triangle', sides: 3, categories: ['triangle'] },
-  'triangle-right': { shape: 'triangle', name: 'Triangle', atlas: 'triangle-right', sides: 3, categories: ['triangle'],
-    fact: 'One square corner, and still a triangle.' },
+  'triangle-right': { shape: 'triangle', name: 'Triangle', atlas: 'triangle-right', sides: 3, categories: ['triangle'] },
   square: { shape: 'square', name: 'Square', atlas: 'square', sides: 4,
-    categories: ['square', 'rectangle', 'rhombus', 'parallelogram', 'quadrilateral'],
-    fact: '4 equal sides and 4 square corners.' },
+    categories: ['square', 'rectangle', 'rhombus', 'parallelogram', 'quadrilateral'] },
   rectangle: { shape: 'rectangle', name: 'Rectangle', atlas: 'rectangle', sides: 4,
-    categories: ['rectangle', 'parallelogram', 'quadrilateral'],
-    fact: '4 square corners. Two long sides and two short sides.' },
+    categories: ['rectangle', 'parallelogram', 'quadrilateral'] },
   rhombus: { shape: 'rhombus', name: 'Rhombus', atlas: 'rhombus', sides: 4,
-    categories: ['rhombus', 'parallelogram', 'quadrilateral'],
-    fact: '4 equal sides, like a square pushed over.' },
+    categories: ['rhombus', 'parallelogram', 'quadrilateral'] },
   parallelogram: { shape: 'parallelogram', name: 'Parallelogram', atlas: 'parallelogram', sides: 4,
-    categories: ['parallelogram', 'quadrilateral'],
-    fact: 'Opposite sides are parallel, like a leaning rectangle.' },
+    categories: ['parallelogram', 'quadrilateral'] },
   trapezium: { shape: 'trapezium', name: TERMS.trapezium, atlas: 'trapezium', sides: 4,
-    categories: ['trapezium', 'quadrilateral'],
-    fact: 'Only one pair of sides is parallel.' },
+    categories: ['trapezium', 'quadrilateral'] },
   pentagon: { shape: 'pentagon', name: 'Pentagon', atlas: 'pentagon', sides: 5, categories: ['pentagon'] },
   hexagon: { shape: 'hexagon', name: 'Hexagon', atlas: 'hexagon', sides: 6, categories: ['hexagon'] },
   octagon: { shape: 'octagon', name: 'Octagon', atlas: 'octagon', sides: 8, categories: ['octagon'] },
   nonagon: { shape: 'nonagon', name: 'Nonagon', atlas: 'nonagon', sides: 9, categories: ['nonagon'] },
   decagon: { shape: 'decagon', name: 'Decagon', atlas: 'decagon', sides: 10, categories: ['decagon'] },
-  circle: { shape: 'circle', name: 'Circle', atlas: 'circle', curved: true, categories: ['circle'],
-    fact: 'Round all the way around, with no corners.' },
-  oval: { shape: 'oval', name: 'Oval', atlas: 'oval', curved: true, categories: ['oval'],
-    fact: 'A stretched circle: curved, with no corners.' },
-  semicircle: { shape: 'semicircle', name: 'Semicircle', atlas: 'semicircle', categories: ['semicircle'],
-    lines: ['1 curved side, 1 straight side', '2 corners'], fact: 'Half of a circle.' },
+  circle: { shape: 'circle', name: 'Circle', atlas: 'circle', curved: true, categories: ['circle'] },
+  oval: { shape: 'oval', name: 'Oval', atlas: 'oval', curved: true, categories: ['oval'] },
+  semicircle: { shape: 'semicircle', name: 'Semicircle', atlas: 'semicircle', categories: ['semicircle'] },
   // a shape family used as a challenge target; it has no fish of its own
   quadrilateral: { shape: 'quadrilateral', name: 'Quadrilateral', sides: 4, categories: ['quadrilateral'] },
 };
@@ -57,18 +48,6 @@ const LOCATIONS = [
   { name: 'Hexagon Pass', background: 2, waterline: 387,
     challenges: [{ target: 'hexagon', others: ['pentagon', 'octagon'] }] },
   { name: 'Quadrilateral Waters', background: 3, waterline: 388,
-    // before rowing here, a fish Popo has never seen leaps out of the water
-    discovery: {
-      fish: 'rhombus',
-      woah: [
-        { who: 'popo', text: '*Woah!*', cue: { word: 0, do: 'exclaim' } },
-        { who: 'popo', text: "I haven't seen *that* one before!" },
-      ],
-      after: [
-        { who: 'popo', text: 'What *kind* of fish was that?', cue: { word: 1, do: 'wonder' } },
-        { who: 'popo', text: "Let's find *out!*", cue: { word: 2, do: 'hop' } },
-      ],
-    },
     challenges: [{ target: 'quadrilateral', all: true, fishScale: 0.9,
       fish: ['square', 'rectangle', 'parallelogram', 'rhombus', 'triangle-right', 'oval'] }] },
 ];
@@ -85,16 +64,6 @@ function challengeFish(challenge) {
   return challenge.fish || [challenge.target, ...challenge.others];
 }
 
-function learningLines(shape) {
-  if (shape.lines) return shape.lines;
-  if (shape.curved) return ['Curved all around', 'No corners'];
-  return [`${shape.sides} straight sides`, `${shape.sides} corners`];
-}
-
-function sideFact(shape) {
-  return shape.fact || `${shape.sides} straight sides and ${shape.sides} corners.`;
-}
-
 // Story lines, delivered word by word. *Stressed* words land bigger with a boing, and a cue
 // fires a moment in the scene when its word appears (see Game.storyCue).
 const STORY = {
@@ -105,7 +74,20 @@ const STORY = {
   ],
   wrong: { who: 'popo', text: 'Whoopsie Doopsie!' },
   catch: { who: 'popo', text: '*Great* catch!', cue: { word: 0, do: 'hop' } },
+  // after the last level, a fish Popo has never seen leaps out of the water
+  ending: {
+    fish: 'trapezium',
+    woah: [
+      { who: 'popo', text: '*Woah!*', cue: { word: 0, do: 'exclaim' } },
+      { who: 'popo', text: "I haven't seen *that* one before!" },
+    ],
+    after: [
+      { who: 'popo', text: 'What *kind* of fish was that?', cue: { word: 1, do: 'wonder' } },
+      { who: 'popo', text: "Let's find *out!*", cue: { word: 2, do: 'hop' } },
+    ],
+  },
 };
 
-Object.assign(PopoGame, { TERMS, SHAPES, LOCATIONS, STORY, getShape, matchesTarget, challengeFish, learningLines, sideFact });
+
+Object.assign(PopoGame, { TERMS, SHAPES, LOCATIONS, STORY, getShape, matchesTarget, challengeFish });
 })(window.PopoGame = window.PopoGame || {});

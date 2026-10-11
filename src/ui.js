@@ -1,6 +1,6 @@
 (function (PopoGame) {
 'use strict';
-const { assets, SHAPES, learningLines, sideFact } = PopoGame;
+const { assets, SHAPES } = PopoGame;
 
 const $ = (id) => document.getElementById(id);
 
@@ -34,7 +34,7 @@ class UI {
       hud: $('hud'), hits: $('hits'), hand: $('hand'), start: $('screen-start'), loading: $('loading'), play: $('btn-play'),
       instruction: $('instruction'), instructionText: $('instruction-text'),
       sound: $('btn-sound'), pause: $('btn-pause'),
-      reward: $('overlay-reward'), rewardFish: $('reward-fish'), rewardImg: $('reward-fish-img'), rewardName: $('reward-name'), rewardFact: $('reward-fact'),
+      reward: $('overlay-reward'), rewardFish: $('reward-fish'), rewardImg: $('reward-fish-img'), rewardName: $('reward-name'),
       pauseOverlay: $('overlay-pause'), resume: $('btn-resume'), restart: $('btn-restart'),
       summary: $('overlay-summary'), summaryList: $('summary-list'), playAgain: $('btn-play-again'),
       rotate: $('rotate-hint'), scene: $('scene'), speech: $('speech'), caption: $('caption'),
@@ -249,8 +249,6 @@ class UI {
     this.el.rewardImg.innerHTML = '';
     this.el.rewardImg.appendChild(fishCanvas(shape.atlas, 240));
     this.el.rewardName.textContent = shape.name.toUpperCase();
-    const lines = learningLines(shape);
-    this.el.rewardFact.innerHTML = `<span>${lines[0]}</span><span>${lines[1]}</span><em>${sideFact(shape)}</em>`;
     this.el.reward.hidden = false;
     this.el.reward.classList.remove('leave');
     this.el.hud.classList.add('prize');
