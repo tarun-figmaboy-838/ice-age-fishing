@@ -7,3 +7,5 @@ assets/sprites/paddling/atlas.png
 assets/sprites/paddling/frame-*.png
 assets/sprites/paddling/manifest.json
 assets/sprites/paddling/preview.apng
+# voice auditions from tools/build-voice.py --audition
+asset/voice/auditions/

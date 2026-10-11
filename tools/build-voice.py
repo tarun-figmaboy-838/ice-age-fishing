@@ -9,10 +9,16 @@ Each clip is keyed by its speaker and its on-screen text, so the dialogue in src
 src/game.js finds it. A line with no clip falls back to the synthesized voice blips, so editing
 a line's text never breaks the game; just run this again to re-record it.
 
+Voices: the narrator is a clear Indian English (en-IN) voice and Popo and Swiftee are character
+voices, found in Gemini's voice library (see CAST). The chosen voices are saved in
+asset/voice/cast.json, so every run sounds the same; a role whose voice changes is re-recorded.
+
 Requires lameenc (pip install --user lameenc).
-Run: python3 tools/build-voice.py            records missing clips, then repacks
-     python3 tools/build-voice.py --force    re-records every clip
-     python3 tools/build-voice.py --only popo   re-records one speaker
+Run: python3 tools/build-voice.py --audition    one sample from each candidate voice per role,
+                                                in asset/voice/auditions/, to listen and pick
+     python3 tools/build-voice.py --cast popo=VOICE   use that voice (id or prebuilt name)
+     python3 tools/build-voice.py               records missing clips, then repacks
+     python3 tools/build-voice.py --force       re-records every clip (--only popo: one role)
 """
 import argparse
 import array
@@ -24,6 +30,7 @@ import re
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import wave
 
@@ -31,17 +38,44 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW = os.path.join(ROOT, 'asset', 'voice')       # untouched recordings, never shipped
 OUT = os.path.join(ROOT, 'assets', 'voice')      # compressed clips, for listening
 DATA = os.path.join(ROOT, 'src', 'voice-data.js')
+CAST_FILE = os.path.join(RAW, 'cast.json')      # the voice chosen for each role
+CLIPS_FILE = os.path.join(RAW, 'clips.json')    # which voice recorded each clip
 
 MODEL = 'gemini-3.8-flash-tts'
 LEGACY_MODEL = 'gemini-2.5-flash-preview-tts'
 API = 'https://generativelanguage.googleapis.com/v1beta'
 
-# Who speaks, with which prebuilt voice, and how they sound overall.
+PREBUILT = {'Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir', 'Leda', 'Orus', 'Aoede', 'Callirrhoe',
+            'Autonoe', 'Enceladus', 'Iapetus', 'Umbriel', 'Algieba', 'Despina', 'Erinome', 'Algenib',
+            'Rasalgethi', 'Laomedeia', 'Achernar', 'Alnilam', 'Schedar', 'Gacrux', 'Pulcherrima',
+            'Achird', 'Zubenelgenubi', 'Vindemiatrix', 'Sadachbia', 'Sadaltager', 'Sulafat'}
+
+# Who speaks and how. `find` searches Gemini's voice library, trying each filter set in turn;
+# `prefer` ranks what it finds by the words in each voice's description; `fallback` is the
+# prebuilt voice used if nothing matches. Accent comes from the voice itself: Google advises
+# against asking for an accent in `style`, which is for delivery only.
 CAST = {
-    'narrator': dict(voice='Sulafat', style='Warm, playful storybook narrator reading to young children; smiling, bright, unhurried.'),
-    'popo': dict(voice='Fenrir', style='Goofy, bouncy cartoon polar bear; a big cheerful grin, comically expressive.'),
-    'swiftee': dict(voice='Leda', style='Tiny excited cartoon bird; quick, chirpy and squeaky with delight.'),
+    'narrator': dict(
+        find=[{'language_code': ['en-IN'], 'persona': ['Narrator']}, {'language_code': ['en-IN']},
+              {'accent': ['Indian']}],
+        prefer=['clear', 'warm', 'story', 'narrat', 'friendly', 'gentle', 'audiobook', 'child', 'kids'],
+        fallback='Sulafat',
+        style='Clear, warm and unhurried, like a storyteller reading to young children; smiling.'),
+    'popo': dict(
+        find=[{'language_code': ['en-IN'], 'gender': ['male'], 'pitch': ['low', 'medium']},
+              {'gender': ['male'], 'pitch': ['low', 'medium']}],
+        prefer=['playful', 'goofy', 'cartoon', 'character', 'animat', 'cheerful', 'warm', 'friendly',
+                'excit', 'fun', 'lively', 'upbeat', 'bubbly', 'expressive'],
+        fallback='Fenrir',
+        style='Goofy, bouncy and warm, with a big cheerful grin; comically expressive.'),
+    'swiftee': dict(
+        find=[{'language_code': ['en-IN'], 'pitch': ['high']}, {'pitch': ['high']}],
+        prefer=['playful', 'cartoon', 'character', 'animat', 'bright', 'youthful', 'excit', 'cheerful',
+                'lively', 'bubbly', 'energetic'],
+        fallback='Leda',
+        style='Quick, chirpy and squeaky with delight, like a tiny excited bird.'),
 }
+AUDITION_LINE = {'narrator': 'Popo *loves* fishing.', 'popo': 'Whoopsie Doopsie!', 'swiftee': "Let's find *out!*"}
 
 INSTRUCTION = 'Clear and encouraging, a little slower so a young child can follow.'
 ANNOUNCE = 'Excited, celebratory announcer naming a prize.'
@@ -101,6 +135,81 @@ def api_key():
     sys.exit('No API key: set GEMINI_API_KEY, or put GEMINI_API_KEY=... in a .env file in the project root.')
 
 
+def get(url, key):
+    req = urllib.request.Request(url, headers={'x-goog-api-key': key})
+    with urllib.request.urlopen(req, timeout=60) as res:
+        return json.load(res)
+
+
+def pick(v, *names):
+    """A voice field, whichever case the API spells it in."""
+    for n in names:
+        if v.get(n):
+            return v[n]
+    return ''
+
+
+def describe(v):
+    return ' | '.join(str(x) for x in (pick(v, 'display_name', 'displayName'), pick(v, 'accent'),
+                                        pick(v, 'gender'), pick(v, 'pitch'), pick(v, 'description')[:90]) if x)
+
+
+def library(filters, key):
+    voices, token = [], None
+    while len(voices) < 600:
+        query = dict(filters, page_size=200, **({'page_token': token} if token else {}))
+        res = get(f'{API}/voices?{urllib.parse.urlencode(query, doseq=True)}', key)
+        voices += res.get('voices', [])
+        token = res.get('next_page_token') or res.get('nextPageToken')
+        if not token:
+            break
+    return voices
+
+
+def candidates(who, key):
+    """Library voices that suit a role, best match first."""
+    cast = CAST[who]
+    for filters in cast['find']:
+        try:
+            found = library(filters, key)
+        except (OSError, ValueError) as e:  # HTTP errors, dropped connections, bad JSON
+            print(f'  voice search {filters} failed: {getattr(e, "code", "") or e}')
+            continue
+        if found:
+            def score(v):
+                text = ' '.join(str(pick(v, f)) for f in ('display_name', 'displayName', 'description', 'persona', 'contexts')).lower()
+                return sum(word in text for word in cast['prefer'])
+            return sorted(found, key=score, reverse=True)
+    return []
+
+
+def voice_ref(v):
+    return pick(v, 'id', 'voice_id', 'voiceId', 'name')
+
+
+def load_json(path):
+    return json.load(open(path)) if os.path.exists(path) else {}
+
+
+def resolve_cast(roles, key, pinned):
+    """The voice for each role: pinned on the command line, saved from an earlier run, or the
+    best library match (falling back to a prebuilt voice)."""
+    chosen = load_json(CAST_FILE)
+    for who, voice in pinned.items():
+        chosen[who] = {'voice': voice, 'about': 'chosen with --cast'}
+    for who in roles:
+        if who in chosen:
+            continue
+        found = candidates(who, key)
+        if found:
+            chosen[who] = {'voice': voice_ref(found[0]), 'about': describe(found[0])}
+        else:
+            chosen[who] = {'voice': CAST[who]['fallback'], 'about': 'prebuilt fallback (no library match)'}
+    with open(CAST_FILE, 'w') as fh:
+        json.dump(chosen, fh, indent=2)
+    return chosen
+
+
 def post(url, body, key):
     req = urllib.request.Request(url, data=json.dumps(body).encode(), method='POST',
                                  headers={'Content-Type': 'application/json', 'x-goog-api-key': key})
@@ -127,27 +236,35 @@ def find_audio(node):
     return None
 
 
-def record(who, text, note, key, model):
-    cast = CAST[who]
-    style = f"{cast['style']} {note}".strip()
-    try:
-        res = post(f'{API}/interactions', {
-            'model': model,
-            'input': [{'type': 'user_input', 'content': [{
-                'type': 'text', 'text': spoken(text),
-                'annotations': [{'type': 'speech_metadata', 'style': style}],
-            }]}],
-            'response_format': {'type': 'audio'},
-            'generation_config': {'speech_config': [{'voice': cast['voice']}]},
-        }, key)
-    except urllib.error.HTTPError as e:
-        if e.code not in (400, 404):
-            raise
+def record(who, text, note, key, model, voice):
+    style = f"{CAST[who]['style']} {note}".strip()
+    # a library voice may be named "voices/voice_..." or just "voice_..."; try both
+    refs = [voice] + ([voice.split('/', 1)[1]] if voice.startswith('voices/') else [])
+    res, error = None, None
+    for ref in refs:
+        try:
+            res = post(f'{API}/interactions', {
+                'model': model,
+                'input': [{'type': 'user_input', 'content': [{
+                    'type': 'text', 'text': spoken(text),
+                    'annotations': [{'type': 'speech_metadata', 'style': style}],
+                }]}],
+                'response_format': {'type': 'audio'},
+                'generation_config': {'speech_config': [{'voice': ref}]},
+            }, key)
+            break
+        except urllib.error.HTTPError as e:
+            if e.code not in (400, 404):
+                raise
+            error = e
+    if res is None:
+        if voice not in PREBUILT:
+            raise error
         # older API surface: generateContent returns raw 24 kHz 16-bit PCM
         res = post(f'{API}/models/{LEGACY_MODEL}:generateContent', {
             'contents': [{'parts': [{'text': f'Say it like this: {style}\n\n{spoken(text)}'}]}],
             'generationConfig': {'responseModalities': ['AUDIO'], 'speechConfig': {
-                'voiceConfig': {'prebuiltVoiceConfig': {'voiceName': cast['voice']}}}},
+                'voiceConfig': {'prebuiltVoiceConfig': {'voiceName': voice}}}},
         }, key)
     found = find_audio(res)
     if not found:
@@ -199,31 +316,70 @@ def mp3(rate, samples):
     return bytes(enc.encode(samples.tobytes()) + enc.flush())
 
 
+def record_retrying(who, text, note, key, model, voice):
+    for attempt in range(3):
+        try:
+            return record(who, text, note, key, model, voice)
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode(errors='replace')[:300]
+            if e.code in (429, 500, 503) and attempt < 2:
+                time.sleep(4 * (attempt + 1))
+                continue
+            sys.exit(f'Gemini refused {who!r} {text!r} with voice {voice!r}: HTTP {e.code} {detail}')
+
+
+def audition(key, model, roles):
+    """Records each role's sample line in its top library voices (and its fallback)."""
+    folder = os.path.join(RAW, 'auditions')
+    os.makedirs(folder, exist_ok=True)
+    for who in roles:
+        found = candidates(who, key)[:4]
+        voices = [(voice_ref(v), describe(v)) for v in found] + [(CAST[who]['fallback'], 'prebuilt fallback')]
+        print(f'{who}:')
+        for i, (voice, about) in enumerate(voices, 1):
+            rate, samples = record_retrying(who, AUDITION_LINE[who], '', key, model, voice)
+            name = f"{who}-{i}-{re.sub(r'[^A-Za-z0-9]+', '-', voice.split('/')[-1])}.wav"
+            save_wav(os.path.join(folder, name), rate, trim(samples, rate))
+            print(f'  {i}. {name}  --cast {who}={voice}\n     {about}')
+    print(f'Listen in {os.path.relpath(folder, ROOT)}/, then run with --cast ROLE=VOICE to choose.')
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--force', action='store_true', help='re-record clips that already exist')
-    ap.add_argument('--only', choices=sorted(CAST), help='only record this speaker')
+    ap.add_argument('--only', choices=sorted(CAST), help='only this role')
+    ap.add_argument('--audition', action='store_true', help='record samples of candidate voices and stop')
+    ap.add_argument('--cast', action='append', default=[], metavar='ROLE=VOICE', help='use this voice for a role')
     ap.add_argument('--model', default=MODEL)
     args = ap.parse_args()
     os.makedirs(RAW, exist_ok=True)
     os.makedirs(OUT, exist_ok=True)
+    roles = [args.only] if args.only else list(CAST)
+    pinned = dict(c.split('=', 1) for c in args.cast)
+    assert set(pinned) <= set(CAST), f'roles are {sorted(CAST)}'
 
-    todo = [l for l in LINES if (args.force and (not args.only or l[0] == args.only))
-            or not os.path.exists(os.path.join(RAW, slug(l[0], l[1]) + '.wav'))]
-    key = api_key() if todo else None
+    if args.audition:
+        audition(api_key(), args.model, roles)
+        return
+
+    recorded = load_json(CLIPS_FILE)
+    have = lambda who, text: os.path.exists(os.path.join(RAW, slug(who, text) + '.wav'))
+    missing = [l for l in LINES if l[0] in roles and not have(l[0], l[1])]
+    key = api_key() if missing or args.force or pinned else None
+    cast = resolve_cast(roles, key, pinned) if key else load_json(CAST_FILE)
+    # record what's missing, what was forced, and what an earlier voice recorded
+    todo = [l for l in LINES if l[0] in roles and key and (
+        args.force or not have(l[0], l[1]) or recorded.get(slug(l[0], l[1])) != cast[l[0]]['voice'])]
+    for who in roles:
+        if who in cast:
+            print(f"{who}: {cast[who]['voice']}  ({cast[who].get('about', '')})")
     for who, text, note in todo:
         print(f'recording {who}: {text}')
-        for attempt in range(3):
-            try:
-                rate, samples = record(who, text, note, key, args.model)
-                break
-            except urllib.error.HTTPError as e:
-                detail = e.read().decode(errors='replace')[:300]
-                if e.code in (429, 500, 503) and attempt < 2:
-                    time.sleep(4 * (attempt + 1))
-                    continue
-                sys.exit(f'Gemini refused {who!r} {text!r}: HTTP {e.code} {detail}')
+        rate, samples = record_retrying(who, text, note, key, args.model, cast[who]['voice'])
         save_wav(os.path.join(RAW, slug(who, text) + '.wav'), rate, samples)
+        recorded[slug(who, text)] = cast[who]['voice']
+        with open(CLIPS_FILE, 'w') as fh:
+            json.dump(recorded, fh, indent=2)
 
     clips = {}
     for who, text, _ in LINES:

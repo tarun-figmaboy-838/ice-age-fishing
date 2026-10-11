@@ -78,7 +78,16 @@ python3 -m pip install --user lameenc
 python3 tools/build-voice.py                 # records missing lines; --force re-records all
 ```
 
-The cast (voice and delivery for each speaker) and the line list are at the top of the script.
+The narrator is a clear Indian English (en-IN) voice; Popo and Swiftee are character voices.
+The script finds them in Gemini's voice library (the cast and line list are at the top of it).
+To hear the candidates first, record one sample per voice and then choose:
+
+```
+python3 tools/build-voice.py --audition          # samples in asset/voice/auditions/
+python3 tools/build-voice.py --cast popo=VOICE   # use that voice; only Popo is re-recorded
+```
+
+The chosen voices are kept in `asset/voice/cast.json`, so later runs sound the same.
 Each clip is keyed by speaker and on-screen text: the words of a line appear as they are spoken,
 the music ducks under the voice, and a line without a clip falls back to the synthesized
 voice blips. Raw recordings are kept in `asset/voice/`.
