@@ -311,6 +311,10 @@ class AudioEngine {
       case 'skid': this.tone({ freq: 1650, to: 1250, type: 'sawtooth', dur: 0.5, gain: 0.035 }); this.tone({ freq: 1720, to: 1300, type: 'sawtooth', dur: 0.5, gain: 0.03 }); this.noise({ dur: 0.5, type: 'bandpass', freq: 2600, to: 1500, q: 2, gain: 0.12 }); break;
       case 'poof': this.noise({ dur: 0.32, type: 'lowpass', freq: 1800, to: 240, gain: 0.32 }); this.tone({ freq: 160, to: 70, dur: 0.22, gain: 0.12 }); break;
       case 'tada': [523.25, 659.25, 783.99, 1046.5].forEach((n, i) => { this.tone({ freq: n, t: now + i * 0.07, type: 'triangle', dur: i === 3 ? 0.5 : 0.12, gain: 0.09 }); }); this.bell(2093, now + 0.21, 0.05); break;
+      case 'giggle': [0, 0.07, 0.14, 0.21].forEach((d, i) => this.tone({ freq: 760 + i * 90, to: 1050 + i * 90, type: 'triangle', t: now + d, dur: 0.06, gain: 0.06 })); break;
+      // streak celebrations: a party toot, then a bigger rising fanfare
+      case 'combo2': [659.25, 783.99, 987.77].forEach((n, i) => this.tone({ freq: n, to: n * 1.06, type: 'square', t: now + i * 0.08, dur: 0.1, gain: 0.05 })); this.bell(1975.5, now + 0.24, 0.05); break;
+      case 'combo3': [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((n, i) => { this.tone({ freq: n, type: 'triangle', t: now + i * 0.07, dur: i === 4 ? 0.45 : 0.1, gain: 0.08 }); this.tone({ freq: n * 2, type: 'sine', t: now + i * 0.07, dur: 0.08, gain: 0.03 }); }); this.noise({ t: now + 0.3, dur: 0.4, type: 'highpass', freq: 5000, gain: 0.05 }); break;
       case 'flap': this.noise({ dur: 0.12, type: 'bandpass', freq: 1300, to: 520, q: 0.9, gain: 0.07 }); break;
       case 'word': { const f = 700 + Math.random() * 260; this.tone({ freq: f, to: f * 1.15, type: 'sine', dur: 0.05, gain: 0.04 }); break; }
       case 'cheer': [523.25, 659.25, 783.99].forEach((n, i) => this.tone({ freq: n, t: now + i * 0.07, type: 'triangle', dur: 0.16, gain: 0.08 })); break;

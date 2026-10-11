@@ -359,6 +359,24 @@ html, body {
   pointer-events: none;
 }
 .fish-img { position: relative; display: block; }
+/* streaks: two right catches in a row and the prize fish dances; three and it spins in confetti */
+.reward.combo-2 .fish-img { animation: fish-dance 0.42s ease-in-out 0.75s 4; }
+.reward.combo-3 .fish-img { animation: fish-spin 0.7s cubic-bezier(0.3, 1.4, 0.5, 1) 0.7s, fish-dance 0.42s ease-in-out 1.45s 3; }
+.reward.combo-3 .hero-glow { inset: 1em; }
+@keyframes fish-dance {
+  0%, 100% { transform: rotate(0) translateY(0); }
+  25% { transform: rotate(-12deg) translateY(-1.6em); }
+  75% { transform: rotate(12deg) translateY(-1.6em); }
+}
+@keyframes fish-spin {
+  0% { transform: rotate(0) scale(1); }
+  55% { transform: rotate(200deg) scale(1.18); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+.reward.combo-3 .sparkles i { width: 1.8em; height: 1.1em; clip-path: none; border-radius: 0.2em; animation-duration: 1.7s; animation-iteration-count: 2; }
+.reward.combo-3 .sparkles i:nth-child(3n) { background: #ff6b8b; }
+.reward.combo-3 .sparkles i:nth-child(3n+1) { background: #5fd3ff; }
+.reward.combo-3 .sparkles i:nth-child(3n+2) { background: #8ce05a; }
 .fish-img canvas { display: block; width: 29em !important; height: auto !important; filter: drop-shadow(0 1em 1.6em rgba(0, 0, 0, 0.4)); }
 .sparkles i {
   position: absolute;
@@ -482,6 +500,6 @@ html, body {
 
 @media (prefers-reduced-motion: reduce) {
   .hand, .speech.pop, .caption.pop, .next-btn { animation: none; }
-  .hero-fish, .sparkles i, .hero-glow, .prize-burst { animation: none; }
+  .hero-fish, .sparkles i, .hero-glow, .prize-burst, .reward .fish-img { animation: none; }
   .scene { transition: none; }
 }

@@ -256,7 +256,10 @@ class UI {
   }
 
   // --- reward ---------------------------------------------------------------
-  showReward(shape) {
+  // combo: right catches in a row (1-3); a streak makes the prize fish dance, then spin in confetti
+  showReward(shape, combo = 1) {
+    this.el.reward.classList.remove('combo-2', 'combo-3');
+    if (combo >= 2) this.el.reward.classList.add(`combo-${combo}`);
     this.el.rewardImg.innerHTML = '';
     this.el.rewardImg.appendChild(fishCanvas(shape.atlas, 240));
     this.el.rewardName.textContent = shape.name.toUpperCase();

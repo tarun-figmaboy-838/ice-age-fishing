@@ -32,6 +32,7 @@ const state = {
   token: 0,
   idleTime: 0,
   hintShown: false,
+  streak: 0, // right catches in a row, with no wrong tap between
 };
 
 function resetProgress() {
@@ -46,6 +47,7 @@ function resetProgress() {
   state.discovered = new Set();
   state.idleTime = 0;
   state.hintShown = false;
+  state.streak = 0;
 }
 
 // Every sequence captures a token; bumping it cancels anything still waiting.

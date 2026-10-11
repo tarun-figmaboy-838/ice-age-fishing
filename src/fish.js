@@ -57,6 +57,11 @@ class Fish {
     this.wiggleT = 0;
   }
 
+  // a cheeky somersault with a little hop
+  flip() {
+    this.flipT = 0;
+  }
+
   // A quick playful burst of speed, leaving a short bubble trail.
   startDart(boost = 2.6) {
     if (this.reduced || this.frozen || this.escaping) return;
@@ -100,6 +105,7 @@ class Fish {
     this.lastY = this.y;
     const want = this.frozen || this.escaping ? 0 : Math.max(-0.09, Math.min(0.09, vy / 900));
     this.pitch += (want - this.pitch) * Math.min(1, dt * 3);
+    if (this.flipT >= 0 && (this.flipT += dt) > 0.6) this.flipT = -1;
     if (this.wiggleT >= 0) {
       this.wiggleT += dt;
       if (this.wiggleT > (this.subtleWiggle ? 0.16 : 0.45)) this.wiggleT = -1;
@@ -217,9 +223,14 @@ class Fish {
         rot = Math.sin(t * 38) * 0.14 * Math.max(0, 1 - t / 0.45);
       }
     }
+    if (this.flipT >= 0) {
+      const p = this.flipT / 0.6;
+      rot += this.dir * -(p * p * (3 - 2 * p)) * TAU;
+    }
+    const hop = this.flipT >= 0 ? -Math.sin((this.flipT / 0.6) * Math.PI) * 22 : 0;
     ctx.save();
     ctx.globalAlpha = this.alpha;
-    ctx.translate(this.x, this.y + bob);
+    ctx.translate(this.x, this.y + bob + hop);
     if (this.hinted) {
       const r = Math.max(this.w, this.h) * 0.62 * this.scale;
       const glow = 0.35 + Math.sin(this.bobPhase * 1.5) * 0.2;
@@ -232,7 +243,7 @@ class Fish {
       ctx.fill();
     }
     // remembered so the hook can follow the mouth exactly (see mouthOf)
-    this.drawBob = bob;
+    this.drawBob = bob + hop;
     this.drawTurn = rot + this.pitch * this.dir;
     ctx.rotate(this.drawTurn);
     ctx.scale(this.dir * this.scale, this.scale);

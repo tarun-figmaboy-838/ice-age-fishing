@@ -111,14 +111,30 @@ async function correctCatch(game, fish) {
     popo.line.tension = 0;
     popo.idle();
     game.collect(fish);
+    popo.bucketBump = { t: 0 }; // it lands in the pile, which wobbles
+    state.streak += 1;
+    const combo = Math.min(3, state.streak);
+    if (state.collected.length >= game.totalCatches()) {
+      // the very last fish: the bucket overflows
+      fx.splash(bucket.x, bucket.y - 30, true);
+      fx.sparkle(bucket.x, bucket.y - 40, 26);
+      audio.play('boing');
+    }
     game.cheer();
     audio.play('cheer');
+    if (combo >= 2) {
+      // on a streak, Popo bounces twice and the fish cheer harder
+      audio.play(combo >= 3 ? 'combo3' : 'combo2');
+      fx.sparkle(bucket.x, bucket.y - 30, 10 + combo * 6);
+      game.cheer();
+      clock.wait(380, token).then(() => game.storyCue('hop')).catch(() => {});
+    }
     await game.say(STORY.catch, token);
 
     state.phase = PHASE.CELEBRATING;
     audio.duck(2200);
     audio.play('success');
-    ui.showReward(fish.shape);
+    ui.showReward(fish.shape, combo);
     // in a catch-them-all challenge the prize is quicker while more are still swimming
     const more = game.currentChallenge().all && game.remainingTargets().length > 0;
     await clock.wait(450, token);
@@ -154,6 +170,7 @@ async function wrongCatch(game, fish) {
   try {
     state.phase = PHASE.CASTING;
     state.selectedFish = fish;
+    state.streak = 0; // a wrong tap ends the streak
     game.instructionRevert = 0;
     ui.setHitsEnabled(false);
     game.showHandOn(null);

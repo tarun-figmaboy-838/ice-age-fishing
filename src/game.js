@@ -275,6 +275,15 @@ class Game {
     this.ui.showSummary([...state.discovered]);
   }
 
+  // How many fish the whole journey asks for (each catch-them-all target counts).
+  totalCatches() {
+    if (!this.total) {
+      this.total = LOCATIONS.reduce((n, loc) => n + loc.challenges.reduce((m, ch) =>
+        m + (ch.all ? challengeFish(ch).filter((k) => matchesTarget(k, ch.target)).length : 1), 0), 0);
+    }
+    return this.total;
+  }
+
   collect(fish) {
     state.collected.push(fish.key);
     state.discovered.add(fish.shape.shape);
@@ -333,6 +342,36 @@ class Game {
     for (const f of state.fish) {
       if (f.gone || f === state.selectedFish) continue;
       if (Math.hypot(f.x - point.x, f.y - point.y) < 300) f.lookAt(point);
+    }
+    this.fishReacts(point);
+  }
+
+  // The fish nearest a tap does something silly: a somersault and a giggle, a burst of
+  // bubbles, or a quick dart away. Never the same trick twice running, and not too often.
+  fishReacts(point) {
+    const now = performance.now();
+    let near = null;
+    let best = 230;
+    for (const f of [...state.fish, ...this.ambient]) {
+      if (f.gone || f.frozen || f.escaping || f === state.selectedFish || !f.flip) continue;
+      const d = Math.hypot(f.x - point.x, f.y - point.y);
+      if (d < best && (f.reactedAt || 0) < now - 1200) { best = d; near = f; }
+    }
+    if (!near) return;
+    near.reactedAt = now;
+    const tricks = ['flip', 'bubbles', 'dart'].filter((t) => t !== this.lastTrick);
+    const trick = tricks[Math.floor(Math.random() * tricks.length)];
+    this.lastTrick = trick;
+    if (trick === 'flip') {
+      near.flip();
+      this.audio.play('giggle');
+    } else if (trick === 'bubbles') {
+      near.wiggle();
+      this.puffFrom(near, 8, true);
+      this.audio.play('bubbles');
+    } else {
+      near.startle(point);
+      this.audio.play('puff');
     }
   }
 
