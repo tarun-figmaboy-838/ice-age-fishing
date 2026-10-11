@@ -77,8 +77,8 @@ const JUMPS = [
 
 const css = document.createElement('style');
 css.textContent = `
-.dev-panel { position: fixed; left: 8px; bottom: 8px; z-index: 50; display: flex; flex-wrap: wrap; gap: 4px;
-  max-width: min(560px, calc(100vw - 16px)); padding: 6px; border-radius: 10px; background: rgba(10, 20, 40, 0.82);
+.dev-panel { position: fixed; left: 8px; top: 8px; z-index: 50; display: flex; flex-wrap: wrap; gap: 4px;
+  max-width: min(560px, 33vw); padding: 6px; border-radius: 10px; background: rgba(10, 20, 40, 0.82);
   font: 600 12px/1 system-ui, sans-serif; color: #fff; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35); }
 .dev-panel button { font: inherit; padding: 6px 8px; border: 0; border-radius: 6px; background: #2f4f7f; color: #fff; cursor: pointer; }
 .dev-panel button:hover { background: #3f6aa8; }
