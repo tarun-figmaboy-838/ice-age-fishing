@@ -231,7 +231,10 @@ class Fish {
       ctx.arc(0, 0, r * 1.15, 0, TAU);
       ctx.fill();
     }
-    ctx.rotate(rot + this.pitch * this.dir);
+    // remembered so the hook can follow the mouth exactly (see mouthOf)
+    this.drawBob = bob;
+    this.drawTurn = rot + this.pitch * this.dir;
+    ctx.rotate(this.drawTurn);
     ctx.scale(this.dir * this.scale, this.scale);
     const [x0, y0, x1, y1] = this.box;
     ctx.drawImage(assets.fish.img, x0, y0, x1 - x0, y1 - y0, -this.w / 2, -this.h / 2, this.w, this.h);

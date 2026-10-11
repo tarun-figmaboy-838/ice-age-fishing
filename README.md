@@ -57,7 +57,9 @@ original artwork and tools out of the deployment.
 
 ## Flow
 
-Title banner with a floating play button (fish circle it) → the narrator's opening lines →
+Title banner with a floating play button (fish circle it) → Popo's entrance: he zooms in
+rowing flat out (honk honk!) as fish dart out of his way, screeches past his spot, boings back,
+swaps paddle for rod in a poof (ta-da!) and fish leap for joy → the narrator's opening lines →
 Triangle Bay, Pentagon Cove, Hexagon Pass (one catch each; Popo says "Great catch!" and the
 reward shows the fish and its name) → Quadrilateral Waters (catch all the quadrilateral fish;
 no trapezium) → a trapezium fish Popo has never seen leaps out of the water ("Woah! I haven't
@@ -68,7 +70,18 @@ registered on the belly).
 
 ## Voice-overs
 
-The narrator, Popo and Swiftee are voiced with Gemini text-to-speech. The clips are recorded
+The narrator, Popo and Swiftee are voiced. The shipped clips were recorded locally with
+Kokoro-82M (Apache-2.0, no account): its Hindi speakers give the narrator a clear Indian
+English voice, Popo is a lower, bouncier male voice and Swiftee a sped-up bright one:
+
+```
+python3 -m venv ~/.cache/popo-voice311   # Python 3.10+ (e.g. via `uv python install 3.11`)
+~/.cache/popo-voice311/bin/pip install kokoro soundfile lameenc
+~/.cache/popo-voice311/bin/python tools/build-voice.py --engine kokoro --audition   # samples
+~/.cache/popo-voice311/bin/python tools/build-voice.py --engine kokoro              # record
+```
+
+They can also be recorded with Gemini text-to-speech, which needs an API key. The clips are recorded
 once by `tools/build-voice.py` and shipped as small MP3s inside `src/voice-data.js`, so the API
 key never reaches the game. To record or re-record them:
 

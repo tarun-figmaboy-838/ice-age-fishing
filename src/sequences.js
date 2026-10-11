@@ -3,15 +3,21 @@
 const { clock, ease, Cancelled, state, PHASE, newToken, isCurrent, getShape, Fish, Swiftee, STORY, STAGE_W } = PopoGame;
 
 // The hook hangs this far below the line's end.
-const HOOK_DROP = 11;
+// the line ends at the lip; the hooked fish is drawn over the hook, so it sits inside the mouth
+const HOOK_DROP = 2;
 
 // Where the hook grabs a fish: its smile (measured from the art), mirrored when it swims left,
 // with the line ending just above it so the hook's bend sits in the mouth.
+// The corner of the fish's smile on the stage, through the same bob, tilt and wiggle the fish
+// is drawn with, so the hook stays in its mouth however the fish moves.
 function mouthOf(fish) {
   const [mx, my] = fish.mouth;
+  const lx = fish.dir * (mx - 0.5) * fish.w * fish.scale;
+  const ly = (my - 0.5) * fish.h * fish.scale;
+  const turn = fish.drawTurn || 0;
   return {
-    x: fish.x + fish.dir * (mx - 0.5) * fish.w * fish.scale,
-    y: fish.y + (my - 0.5) * fish.h * fish.scale - HOOK_DROP,
+    x: fish.x + lx * Math.cos(turn) - ly * Math.sin(turn),
+    y: fish.y + (fish.drawBob || 0) + lx * Math.sin(turn) + ly * Math.cos(turn) - HOOK_DROP,
   };
 }
 
@@ -59,6 +65,8 @@ async function correctCatch(game, fish) {
   try {
     state.phase = PHASE.CASTING;
     fish.frozen = true;
+    // the right fish turns to face Popo, so the hook flies straight into its mouth
+    fish.dir = Math.sign(popo.anchor.x - fish.x) || -1;
     fish.wiggle();
     audio.play('fishTap');
     ui.setHitsEnabled(false);
@@ -217,13 +225,33 @@ async function wrongCatch(game, fish) {
     // sit up right where the body lies, then scoot back to the seat
     nodes[16][1] = nodes[15][1] + 14;
     nodes[17][1] = nodes[15][1] * .45;
+    // the tug-of-war: three hard yanks before Popo is pulled off his feet
+    const YANKS = [60, 360, 660];
+    const yank = (ms) => YANKS.reduce((sum, at) => {
+      const d = ms - at;
+      return sum + (d < 0 || d > 280 ? 0 : d < 50 ? d / 50 : (1 - (d - 50) / 230) ** 2);
+    }, 0);
+    const lineEntry = () => {
+      const tip = popo.rodTip(), hook = popo.line.hook;
+      const k = Math.max(0, Math.min(1, (game.waterline - tip.y) / ((hook.y - tip.y) || 1)));
+      return tip.x + (hook.x - tip.x) * k;
+    };
+    const yanked = () => {
+      sound('tug');
+      fx.splash(lineEntry(), game.waterline, false);
+      fx.puff(fish.x - fish.dir * fish.w * 0.4, fish.y, -fish.dir, 3);
+      fish.wiggle();
+    };
     let released = null, hookRelease = null, impacted = false;
     let previousContact = null;
     let eventIndex = 0;
     let feedback = Promise.resolve();
     const events = [
-      [0, () => { state.phase = PHASE.WRONG_PULL; sound('tug'); try { audio.duck(WRONG_DURATION); } catch (e) { /* optional music */ } }],
+      [0, () => { state.phase = PHASE.WRONG_PULL; try { audio.duck(WRONG_DURATION); } catch (e) { /* optional music */ } }],
+      [YANKS[0], yanked],
+      [YANKS[1], yanked],
       [400, () => { state.phase = PHASE.LOSING_BALANCE; fish.wiggle(); }],
+      [YANKS[2], () => { yanked(); sound('reel'); }],
       [950, () => { state.phase = PHASE.FALLING; sound('slip');
         released = { ...popo.mishapRod() }; hookRelease = { ...popo.line.hook };
         popo.line.mode = 'slack'; popo.line.tension = 0;
@@ -273,15 +301,20 @@ async function wrongCatch(game, fish) {
         m.x += gripPoint.x-paw.x;
         m.y += gripPoint.y-paw.y;
       }
-      m.raftAngle = ms < 1450 ? Math.sin(ms / 1450 * Math.PI) * .012 * rotation : 0;
-      m.rodBend = ms < 950 ? Math.sin(ms / 950 * Math.PI) * .06 : 0;
+      const jerk = ms < 950 ? yank(ms) : 0;
+      m.x += jerk * 16 * rotation;
+      m.angle += jerk * .06 * rotation;
+      m.raftAngle = (ms < 1450 ? Math.sin(ms / 1450 * Math.PI) * .012 : 0) + jerk * .03 * rotation;
+      m.rodBend = ms < 950 ? Math.sin(ms / 950 * Math.PI) * .06 + jerk * .2 : 0;
       m.deckOcclusion = ms > 2950 && ms < 3720;
       while (eventIndex < events.length && ms >= events[eventIndex][0]) events[eventIndex++][1]();
       if (ms < 950) {
+        // the fish darts and dives on each yank, thrashing against the line
         const k = ease.inOut(Math.min(1, ms / 400));
-        fish.x = home.x + pull * k;
-        fish.y = home.y + Math.sin(ms / 950 * Math.PI) * 7;
-        popo.line.tension = 1 + .8 * Math.sin(Math.min(1, ms / 950) * Math.PI);
+        fish.x = home.x + pull * k + jerk * 26;
+        fish.y = home.y + Math.sin(ms / 950 * Math.PI) * 7 + jerk * 16;
+        fish.pitch = jerk * .35;
+        popo.line.tension = 1 + .8 * Math.sin(Math.min(1, ms / 950) * Math.PI) + jerk * .9;
       }
       if (released) {
         const k = ease.out(Math.max(0, Math.min(1, (ms - 950) / 500)));
@@ -421,6 +454,150 @@ async function tutorial(game) {
   }
 }
 
+// Before the first line, a cartoon entrance: Popo zooms in rowing flat out (honk honk!), slams
+// on the brakes with a screech, overshoots and springs back boing-boing, swaps paddle for rod
+// in a poof (ta-da!), and hops for joy as a fish leaps up to say hello.
+async function popoArrives(game, token) {
+  const { popo, fx, audio } = game;
+  const reduced = fx.reduced;
+  const from = -620;
+  const overshoot = reduced ? 0 : 110;
+  const stroke = 520; // frantic paddling
+  const raftFront = () => popo.placement('fishing', 'idle').raftRightX + popo.travelShift;
+  popo.travelShift = from;
+  popo.startRowing(stroke);
+  try {
+    await clock.wait(120, token);
+    audio.play('honk');
+    audio.play('whoosh');
+    audio.setTravel(true);
+    let lastBlade = popo.paddleTip();
+    let lastWake = 0;
+    // a fish or two dart out of the way somewhere ahead of the raft
+    const darting = shuffled(JUMPERS);
+    const scatter = reduced ? [] : [[darting[0], between(400, 450)], [darting[1], between(500, 560)]].slice(0, Math.random() < 0.4 ? 1 : 2);
+    const zoom = reduced ? 1300 : 1500;
+    await clock.tween(zoom, token, (t) => {
+      const elapsed = t * zoom;
+      popo.travelShift = from + (overshoot - from) * (t < 0.15 ? (t * t) / 0.3 : t - 0.075) / 0.925;
+      popo.setRowingTime(elapsed);
+      popo.tilt = -0.03 - popo.rowRig.sample(elapsed, stroke).power * 0.03; // leaning into it
+      const blade = popo.paddleTip();
+      if (lastBlade && blade && lastBlade.y < game.waterline && blade.y >= game.waterline) {
+        const crossing = (game.waterline - lastBlade.y) / (blade.y - lastBlade.y);
+        fx.splash(lastBlade.x + (blade.x - lastBlade.x) * crossing, game.waterline, false);
+        audio.play('paddle');
+      }
+      lastBlade = blade;
+      // fish leap out of the way as the raft comes zooming through
+      const bow = popo.placement('fishing', 'idle').raftRightX + popo.travelShift;
+      if (scatter.length && bow > scatter[0][1] - 60) {
+        const [shape, x] = scatter.shift();
+        jump(game, token, shape, x, 1, { dx: between(130, 210), height: between(110, 180), ms: between(650, 850), scale: between(0.5, 0.65) }).catch(() => {});
+      }
+      if (elapsed - lastWake > 160) {
+        lastWake = elapsed;
+        const stern = popo.placement('fishing', 'idle').raftLeftX + popo.travelShift;
+        fx.ripple(stern - 12, game.waterline + 6, 0.9);
+        if (stern > 0) fx.splash(stern - 6, game.waterline, false); // spray kicked up behind
+        fx.splash(stern + 340, game.waterline, false); // and off the bow
+      }
+    });
+    audio.setTravel(false);
+    const held = popo.rowing.time;
+    if (overshoot) {
+      // brakes! the raft screeches past the spot, squashing up in a fan of spray
+      audio.play('skid');
+      audio.play('woah');
+      let lastSpray = 0;
+      await clock.tween(520, token, (t) => {
+        popo.travelShift = overshoot + 34 * Math.sin(t * Math.PI / 2);
+        popo.tilt = 0.12 * Math.sin(t * Math.PI);
+        popo.squash = 0.12 * Math.sin(t * Math.PI);
+        popo.setRowingTime(held);
+        if (t - lastSpray > 0.18) { lastSpray = t; fx.splash(raftFront() + 10, game.waterline, true); }
+      });
+      // ...and springs back onto it, boing-boing
+      audio.play('boing');
+      const back = overshoot + 34;
+      let boinged = false;
+      await clock.tween(820, token, (t) => {
+        popo.travelShift = back * (1 - ease.outBack(t));
+        popo.tilt = -Math.sin(t * Math.PI * 3) * 0.08 * (1 - t);
+        popo.squash = -Math.sin(t * Math.PI * 3) * 0.1 * (1 - t);
+        popo.setRowingTime(held);
+        if (!boinged && t > 0.45) { boinged = true; audio.play('boing'); }
+      });
+    }
+    popo.squash = 0;
+    popo.tilt = 0;
+    // ta-da: a poof, and the paddle has turned into his fishing rod
+    const head = popo.headTop();
+    game.poof = { x: head.x + 30, y: head.y + 120, t: 0 };
+    audio.play('poof');
+    await clock.wait(130, token); // the swap happens inside the cloud
+  } finally {
+    // however the entrance ends (even cancelled by a restart), Popo is left sitting on his spot
+    popo.idle();
+    popo.travelShift = 0;
+    popo.tilt = 0;
+    popo.squash = 0;
+    if (isCurrent(token)) audio.setTravel(false);
+  }
+  audio.play('tada');
+  fx.sparkle(popo.headTop().x + 40, popo.headTop().y + 50, 18);
+  await clock.wait(380, token);
+  // a happy hop, and a fish leaps up to say hello
+  game.storyCue('hop');
+  await fishSaysHello(game, token);
+  await clock.wait(250, token);
+}
+
+// One fish jumps out of the water in an arc and dives back in, with a splash each way.
+async function jump(game, token, shape, x0, dir, { dx = 150, height = 190, ms = 900, scale = 0.7 } = {}) {
+  const { fx, audio } = game;
+  const wl = game.waterline;
+  const fish = new Fish(shape, x0, wl + 30, dir, scale);
+  game.leapers.push(fish);
+  let out = false;
+  let back = false;
+  try {
+    audio.play('leap');
+    await clock.tween(ms, token, (t) => {
+      fish.x = x0 + dir * dx * t;
+      fish.y = wl + 30 - height * 4 * t * (1 - t);
+      fish.pitch = Math.max(-0.8, Math.min(0.8, -(1 - 2 * t) * 0.9));
+      if (!out && fish.y < wl) { out = true; fx.splash(fish.x, wl, false); audio.play('splashSmall'); }
+      if (out && !back && t > 0.5 && fish.y > wl) { back = true; fx.splash(fish.x, wl, true); audio.play('splashSmall'); }
+    });
+  } finally {
+    game.leapers = game.leapers.filter((f) => f !== fish);
+  }
+}
+
+const JUMPERS = ['triangle', 'pentagon', 'hexagon', 'circle', 'square', 'oval', 'rhombus'];
+const between = (a, b) => a + Math.random() * (b - a);
+const anyOf = (list) => list[Math.floor(Math.random() * list.length)];
+// a different fish each time, in a random order
+const shuffled = (list) => list.map((x) => [Math.random(), x]).sort((a, b) => a[0] - b[0]).map((p) => p[1]);
+
+// A few fish leap for joy around the raft at uneven moments, each its own size, height,
+// speed and direction. Resolves after the first ones; the rest finish on their own.
+async function fishSaysHello(game, token) {
+  const raft = game.popo.placement('fishing', 'idle').raftRightX;
+  const count = 3 + Math.floor(Math.random() * 2);
+  const fish = shuffled(JUMPERS);
+  let at = 0;
+  for (let i = 0; i < count; i += 1) {
+    at += between(120, 420);
+    const dir = Math.random() < 0.65 ? 1 : -1;
+    const x0 = between(raft + 60, raft + 620);
+    const opts = { dx: between(90, 200), height: between(110, 220), ms: between(700, 980), scale: between(0.5, 0.68) };
+    clock.wait(at, token).then(() => jump(game, token, fish[i], x0, dir, opts)).catch(() => {});
+  }
+  await clock.wait(900, token);
+}
+
 // The journey opens with the narrator; then the first fish swim in and the tutorial starts.
 async function opening(game) {
   const token = newToken();
@@ -429,7 +606,7 @@ async function opening(game) {
     game.ui.setHitsEnabled(false);
     state.fish = [];
     game.ui.setInstruction('');
-    await clock.wait(800, token);
+    await popoArrives(game, token);
     for (const line of STORY.intro) await game.say(line, token);
     game.fishIn();
     await clock.wait(400, token);

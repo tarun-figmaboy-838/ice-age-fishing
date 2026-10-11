@@ -52,7 +52,7 @@ with sync_playwright() as p:
                 print(stamp,page.evaluate('({phase:popoDebug.state.phase,m:popoDebug.game.popo.mishap && {x:popoDebug.game.popo.mishap.x,y:popoDebug.game.popo.mishap.y,pose:popoDebug.game.popo.mishap.pose,mix:popoDebug.game.popo.mishap.mix,contact:popoDebug.game.popo.bodyLandmark("contact")}})'),flush=True)
             if stamp==3650:  # "Whoopsie Doopsie!" as Popo bobs back up
                 assert page.locator('#speech').is_visible()
-                assert page.locator('#speech .line').inner_text()=='Whoopsie Doopsie!'
+                assert page.locator('#speech .line').text_content().strip()=='Whoopsie Doopsie!'
                 assert page.evaluate('!popoDebug.game.ui.hitsEnabled')
             if stamp==2200:
                 page.set_viewport_size({'width':height,'height':width})

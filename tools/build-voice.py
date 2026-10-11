@@ -13,6 +13,10 @@ Voices: the narrator is a clear Indian English (en-IN) voice and Popo and Swifte
 voices, found in Gemini's voice library (see CAST). The chosen voices are saved in
 asset/voice/cast.json, so every run sounds the same; a role whose voice changes is re-recorded.
 
+Without a Gemini key, --engine kokoro records the same lines locally with Kokoro-82M
+(Apache-2.0, no account needed), using its Hindi speaker voices for Indian English. It needs
+Python 3.10+ with `pip install kokoro soundfile lameenc`; run this script with that Python.
+
 Requires lameenc (pip install --user lameenc).
 Run: python3 tools/build-voice.py --audition    one sample from each candidate voice per role,
                                                 in asset/voice/auditions/, to listen and pick
@@ -74,6 +78,17 @@ CAST = {
                 'lively', 'bubbly', 'energetic'],
         fallback='Leda',
         style='Quick, chirpy and squeaky with delight, like a tiny excited bird.'),
+}
+# The same roles for the local Kokoro engine: voice, speaking speed, and a pitch factor applied
+# afterwards (below 1 is deeper and bigger, above 1 higher and smaller). British-English
+# pronunciation ('b') sits closer to Indian English than American.
+KOKORO = {
+    'narrator': dict(voice='hf_alpha', lang='b', speed=0.92, pitch=1.0,
+                     audition=['hf_alpha', 'hf_beta', 'bf_emma']),
+    'popo': dict(voice='hm_psi', lang='b', speed=1.12, pitch=0.9,
+                 audition=['hm_psi', 'hm_omega', 'am_puck', 'am_fenrir']),
+    'swiftee': dict(voice='hf_beta', lang='b', speed=1.12, pitch=1.3,
+                    audition=['hf_beta', 'hf_alpha', 'af_heart']),
 }
 AUDITION_LINE = {'narrator': 'Popo *loves* fishing.', 'popo': 'Whoopsie Doopsie!', 'swiftee': "Let's find *out!*"}
 
@@ -316,7 +331,38 @@ def mp3(rate, samples):
     return bytes(enc.encode(samples.tobytes()) + enc.flush())
 
 
+PIPELINES = {}
+
+
+def kokoro_ref(who, voice=None):
+    k = KOKORO[who]
+    return f"kokoro:{voice or k['voice']}:{k['speed']}:{k['pitch']}"
+
+
+def record_kokoro(who, text, ref):
+    """Records a line locally with Kokoro; `ref` is kokoro:VOICE:SPEED:PITCH."""
+    import numpy as np
+    from kokoro import KPipeline
+    _, voice, speed, pitch = ref.split(':')
+    lang = KOKORO[who]['lang']
+    if lang not in PIPELINES:
+        PIPELINES[lang] = KPipeline(lang_code=lang, repo_id='hexgrad/Kokoro-82M')
+    # Kokoro reads capitals as letters, so the stressed words go in as plain text
+    plain = text.replace('*', '')
+    parts = [np.asarray(r.audio, dtype=np.float32) for r in PIPELINES[lang](plain, voice=voice, speed=float(speed)) if r.audio is not None]
+    audio = np.concatenate(parts)
+    pitch = float(pitch)
+    if pitch != 1.0:
+        # resample: playing the line back faster raises the pitch (and shortens it), slower lowers it
+        n = int(len(audio) / pitch)
+        audio = np.interp(np.linspace(0, len(audio) - 1, n), np.arange(len(audio)), audio)
+    audio = audio / max(1e-6, float(np.abs(audio).max())) * 0.9
+    return 24000, array.array('h', (audio * 32767).astype('<i2').tobytes())
+
+
 def record_retrying(who, text, note, key, model, voice):
+    if voice.startswith('kokoro:'):
+        return record_kokoro(who, text, voice)
     for attempt in range(3):
         try:
             return record(who, text, note, key, model, voice)
@@ -328,17 +374,20 @@ def record_retrying(who, text, note, key, model, voice):
             sys.exit(f'Gemini refused {who!r} {text!r} with voice {voice!r}: HTTP {e.code} {detail}')
 
 
-def audition(key, model, roles):
-    """Records each role's sample line in its top library voices (and its fallback)."""
+def audition(key, model, roles, engine='gemini'):
+    """Records each role's sample line in its top candidate voices."""
     folder = os.path.join(RAW, 'auditions')
     os.makedirs(folder, exist_ok=True)
     for who in roles:
-        found = candidates(who, key)[:4]
-        voices = [(voice_ref(v), describe(v)) for v in found] + [(CAST[who]['fallback'], 'prebuilt fallback')]
+        if engine == 'kokoro':
+            voices = [(kokoro_ref(who, v), f'Kokoro {v}') for v in KOKORO[who]['audition']]
+        else:
+            found = candidates(who, key)[:4]
+            voices = [(voice_ref(v), describe(v)) for v in found] + [(CAST[who]['fallback'], 'prebuilt fallback')]
         print(f'{who}:')
         for i, (voice, about) in enumerate(voices, 1):
             rate, samples = record_retrying(who, AUDITION_LINE[who], '', key, model, voice)
-            name = f"{who}-{i}-{re.sub(r'[^A-Za-z0-9]+', '-', voice.split('/')[-1])}.wav"
+            name = f"{who}-{i}-{re.sub(r'[^A-Za-z0-9]+', '-', voice.split('/')[-1]).strip('-')}.wav"
             save_wav(os.path.join(folder, name), rate, trim(samples, rate))
             print(f'  {i}. {name}  --cast {who}={voice}\n     {about}')
     print(f'Listen in {os.path.relpath(folder, ROOT)}/, then run with --cast ROLE=VOICE to choose.')
@@ -351,6 +400,8 @@ def main():
     ap.add_argument('--audition', action='store_true', help='record samples of candidate voices and stop')
     ap.add_argument('--cast', action='append', default=[], metavar='ROLE=VOICE', help='use this voice for a role')
     ap.add_argument('--model', default=MODEL)
+    ap.add_argument('--engine', choices=['gemini', 'kokoro'], default='gemini',
+                    help='kokoro records locally without an API key')
     args = ap.parse_args()
     os.makedirs(RAW, exist_ok=True)
     os.makedirs(OUT, exist_ok=True)
@@ -359,14 +410,23 @@ def main():
     assert set(pinned) <= set(CAST), f'roles are {sorted(CAST)}'
 
     if args.audition:
-        audition(api_key(), args.model, roles)
+        audition(api_key() if args.engine == 'gemini' else None, args.model, roles, args.engine)
         return
 
     recorded = load_json(CLIPS_FILE)
     have = lambda who, text: os.path.exists(os.path.join(RAW, slug(who, text) + '.wav'))
     missing = [l for l in LINES if l[0] in roles and not have(l[0], l[1])]
-    key = api_key() if missing or args.force or pinned else None
-    cast = resolve_cast(roles, key, pinned) if key else load_json(CAST_FILE)
+    if args.engine == 'kokoro':
+        key = 'local'
+        cast = load_json(CAST_FILE)
+        for who in roles:
+            voice = pinned.get(who)
+            cast[who] = {'voice': kokoro_ref(who, voice), 'about': f"Kokoro {voice or KOKORO[who]['voice']}"}
+        with open(CAST_FILE, 'w') as fh:
+            json.dump(cast, fh, indent=2)
+    else:
+        key = api_key() if missing or args.force or pinned else None
+        cast = resolve_cast(roles, key, pinned) if key else load_json(CAST_FILE)
     # record what's missing, what was forced, and what an earlier voice recorded
     todo = [l for l in LINES if l[0] in roles and key and (
         args.force or not have(l[0], l[1]) or recorded.get(slug(l[0], l[1])) != cast[l[0]]['voice'])]

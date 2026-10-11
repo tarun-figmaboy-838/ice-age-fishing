@@ -278,10 +278,10 @@ html, body {
   border: 0.3em solid rgba(255, 214, 140, 0.45);
   box-shadow: 0 2em 6em rgba(0, 0, 0, 0.45);
   max-width: 90%;
-  max-height: 96%;
-  overflow: auto;
   box-sizing: border-box;
 }
+/* only the summary and pause cards may scroll; clipping the prize card would box in its glow */
+.card { max-height: 96%; overflow: auto; }
 .card h2, .reward-name { margin: 0 0 0.3em; font-size: 4.4em; letter-spacing: 0.02em; color: #fff; }
 .card.wide { width: 120em; }
 

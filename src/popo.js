@@ -164,6 +164,12 @@ class Popo {
     ctx.rotate(angle);
     ctx.translate(-x, -y);
     ctx.translate(this.travelShift + this.lean, this.bob);
+    // squash and stretch about the raft's middle at the waterline (comic stops and bounces)
+    if (this.squash) {
+      ctx.translate(this.anchor.x, this.anchor.y);
+      ctx.scale(1 + this.squash * 0.6, 1 - this.squash);
+      ctx.translate(-this.anchor.x, -this.anchor.y);
+    }
   }
 
   transformPoint(x, y) {
@@ -478,7 +484,7 @@ class Popo {
   endMishap() {
     this.mishap = null;
     this.rowing = null;
-    this.tilt = this.lean = this.dip = 0;
+    this.tilt = this.lean = this.dip = this.squash = 0;
     this.pose = { sheet: 'fishing', frame: 'idle' };
     this.prevPose = null;
     this.fade = 1;
@@ -498,7 +504,9 @@ class Popo {
     return this.line.hook;
   }
 
-  drawLine(ctx) {
+  // part: 'line', 'hook' or both. A hooked fish is drawn between the two, so the line runs
+  // over it to its lips and the hook sits inside the mouth.
+  drawLine(ctx, part = 'both') {
     if (!this.line.visible) return;
     const tip = this.rodTip();
     const hook = this.hookPosition();
@@ -512,19 +520,26 @@ class Popo {
     const bend = this.line.arc * dist * 0.22;
     const cx = (tip.x + hook.x) / 2 + nx * bend;
     const cy = (tip.y + hook.y) / 2 + ny * bend + (this.line.mode === 'dangle' ? 0 : (1 - Math.min(1, this.line.tension)) * 12);
-    const jitter = this.line.tension > 1 ? Math.sin(this.swayT * 40) * 1.5 : 0;
+    // a taut line twangs; the harder the pull, the more it shakes
+    const jitter = this.line.tension > 1 ? Math.sin(this.swayT * 40) * Math.min(5, 1.5 + (this.line.tension - 1.4) * 4) : 0;
 
     ctx.save();
-    ctx.lineCap = 'round';
-    ctx.lineWidth = 3.2;
-    ctx.strokeStyle = 'rgba(20, 60, 110, 0.35)';
-    ctx.beginPath();
-    ctx.moveTo(tip.x, tip.y);
-    ctx.quadraticCurveTo(cx + jitter, cy, hook.x, hook.y);
-    ctx.stroke();
-    ctx.lineWidth = 1.6;
-    ctx.strokeStyle = 'rgba(245, 250, 255, 0.95)';
-    ctx.stroke();
+    if (part !== 'hook') {
+      ctx.lineCap = 'round';
+      ctx.lineWidth = 3.2;
+      ctx.strokeStyle = 'rgba(20, 60, 110, 0.35)';
+      ctx.beginPath();
+      ctx.moveTo(tip.x, tip.y);
+      ctx.quadraticCurveTo(cx + jitter, cy, hook.x, hook.y);
+      ctx.stroke();
+      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = 'rgba(245, 250, 255, 0.95)';
+      ctx.stroke();
+    }
+    if (part === 'line') {
+      ctx.restore();
+      return;
+    }
 
     // hook: a small J hanging from the line end
     const ang = Math.atan2(hook.y - cy, hook.x - cx);

@@ -35,6 +35,10 @@ try {
 window.addEventListener('pagehide', (event) => { if (!event.persisted) game.dispose(); });
 window.addEventListener('resize', () => game.resize());
 window.addEventListener('orientationchange', () => setTimeout(() => game.resize(), 150));
+// Browsers (Brave and Safari especially) can suspend audio when the tab loses focus or the
+// device sleeps; the next tap or key press brings it back.
+const wakeAudio = () => { if (!state.paused && !document.hidden) audio.resume(); };
+for (const type of ['pointerdown', 'touchend', 'keydown']) document.addEventListener(type, wakeAudio, true);
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) audio.suspend();
   else if (!state.paused) audio.resume();

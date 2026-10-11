@@ -40,7 +40,9 @@ class Game {
     this.raftRippleIn = 1;
     this.dialogue = null;
     this.leaper = null;
+    this.leapers = [];
     this.swiftee = null;
+    this.poof = null;
     this.awaitingNext = false;
     this.ambient = [];
     this.hop = null;
@@ -128,6 +130,8 @@ class Game {
     this.endLine();
     this.leaper = null;
     this.swiftee = null;
+    this.leapers = [];
+    this.poof = null;
     this.awaitingNext = false;
     this.ui.hideNext();
     this.ui.setInstruction('');
@@ -700,6 +704,32 @@ class Game {
   }
 
   // A big comic "!" or "?" that pops above Popo's head and wobbles.
+  // A cartoon cloud: soft white puffs burst outward and fade, hiding a quick costume change.
+  drawPoof(ctx) {
+    const p = this.poof;
+    if (!p) return;
+    const k = Math.min(1, p.t / 0.6);
+    const grow = 1 - (1 - k) ** 3;
+    ctx.save();
+    ctx.globalAlpha = k < 0.35 ? 1 : 1 - (k - 0.35) / 0.65;
+    const puffs = [];
+    for (let i = 0; i < 11; i += 1) {
+      const a = (i / 11) * Math.PI * 2 + 0.3;
+      const d = 30 + grow * (i % 2 ? 84 : 62);
+      const r = (i % 3 === 0 ? 44 : 34) * (0.75 + grow * 0.45);
+      puffs.push([p.x + Math.cos(a) * d * 1.15, p.y + Math.sin(a) * d * 0.75, r]);
+    }
+    puffs.push([p.x, p.y, 46 * (1 - grow * 0.6)]);
+    // outline first, then shade, then the white faces, so the puffs merge into one cloud
+    ctx.fillStyle = '#9fc4e4';
+    for (const [x, y, r] of puffs) { ctx.beginPath(); ctx.arc(x, y, r + 3, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = '#d6eaf8';
+    for (const [x, y, r] of puffs) { ctx.beginPath(); ctx.arc(x + 3, y + 5, r, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = '#ffffff';
+    for (const [x, y, r] of puffs) { ctx.beginPath(); ctx.arc(x - 2, y - 3, r * 0.92, 0, Math.PI * 2); ctx.fill(); }
+    ctx.restore();
+  }
+
   drawMark(ctx) {
     const m = this.mark;
     if (!m) return;
@@ -889,6 +919,7 @@ class Game {
     this.popo.waterResponse = this.fx.raftResponse(this.popo.anchor.x);
     this.rideWaves(dt);
     if (this.swiftee) this.swiftee.update(dt);
+    if (this.poof && (this.poof.t += dt) > 0.6) this.poof = null;
     if (this.awaitingNext && this.swiftee) {
       this.nextNudge = (this.nextNudge || 3) - dt;
       if (this.nextNudge <= 0) {
@@ -1112,14 +1143,25 @@ class Game {
     const offset = this.drawBackground(ctx);
     this.fx.drawWater(ctx, offset, state.fish);
     for (const f of this.ambient) f.draw(ctx);
-    for (const f of state.fish) f.draw(ctx);
+    // a hooked fish goes between the hook and the line: the line runs over it to its lips and
+    // the hook sits inside its mouth
+    const hooked = this.popo.line.mode === 'attached' ? state.selectedFish : null;
+    for (const f of state.fish) if (f !== hooked) f.draw(ctx);
     if (this.leaper) this.leaper.draw(ctx);
+    for (const f of this.leapers) f.draw(ctx);
     this.fx.drawSplashLayer(ctx, false);
-    this.popo.drawLine(ctx);
+    if (hooked) {
+      this.popo.drawLine(ctx, 'hook');
+      hooked.draw(ctx);
+      this.popo.drawLine(ctx, 'line');
+    } else {
+      this.popo.drawLine(ctx);
+    }
     this.popo.draw(ctx);
     this.drawMark(ctx);
     this.drawRaftWater(ctx);
     if (this.swiftee) this.swiftee.draw(ctx);
+    this.drawPoof(ctx);
     this.fx.drawFront(ctx);
     if (this.titleFade > 0) this.drawTitle(ctx, this.titleFade);
     this.ui.syncHits(state.fish);

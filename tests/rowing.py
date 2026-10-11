@@ -47,6 +47,9 @@ with sync_playwright() as p:
         page.wait_for_function('popoDebug.game.popo.rowing')
         page.evaluate('popoDebug.game.restart()')
         page.evaluate('step(100)')
+        # the trip is cancelled; the restart's entrance has Popo row in to his spot again
+        assert page.evaluate('!popoDebug.game.transition && popoDebug.state.locationIndex===0')
+        page.evaluate('step(6000)')
         assert page.evaluate('!popoDebug.game.popo.rowing && popoDebug.game.popo.travelShift===0')
         assert not errors,errors
         print(width,height,fps,result,flush=True)
