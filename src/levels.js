@@ -36,17 +36,19 @@ const SHAPES = {
   quadrilateral: { shape: 'quadrilateral', name: 'Quadrilateral', sides: 4, categories: ['quadrilateral'] },
 };
 
-// One challenge per level. A challenge names a target shape (or a shape family such as
-// 'quadrilateral') and the distractors, which can never belong to the target's family: a
-// square counts as a rectangle and a rhombus, so it is never a distractor for those.
-// With `all`, every fish matching the target has to be caught before the level ends.
+// One challenge per level, and every level is "catch them all": each has several fish of
+// its shape among others, and the level ends once every matching fish is caught. Distractors
+// can never belong to the target's family (a square counts as a rectangle and a rhombus).
 const LOCATIONS = [
   { name: 'Triangle Bay', background: 0, waterline: 388,
-    challenges: [{ target: 'triangle', others: ['circle', 'square'], tutorial: true }] },
+    challenges: [{ target: 'triangle', all: true, tutorial: true, fishScale: 0.9,
+      fish: ['triangle', 'triangle-right', 'triangle', 'circle', 'square', 'oval'] }] },
   { name: 'Pentagon Cove', background: 1, waterline: 390,
-    challenges: [{ target: 'pentagon', others: ['hexagon', 'semicircle'] }] },
+    challenges: [{ target: 'pentagon', all: true, fishScale: 0.9,
+      fish: ['pentagon', 'pentagon', 'pentagon', 'hexagon', 'semicircle', 'triangle'] }] },
   { name: 'Hexagon Pass', background: 2, waterline: 387,
-    challenges: [{ target: 'hexagon', others: ['pentagon', 'octagon'] }] },
+    challenges: [{ target: 'hexagon', all: true, fishScale: 0.9,
+      fish: ['hexagon', 'hexagon', 'hexagon', 'pentagon', 'octagon', 'circle'] }] },
   { name: 'Quadrilateral Waters', background: 3, waterline: 388,
     challenges: [{ target: 'quadrilateral', all: true, fishScale: 0.9,
       fish: ['square', 'rectangle', 'parallelogram', 'rhombus', 'triangle-right', 'oval'] }] },

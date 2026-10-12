@@ -31,11 +31,6 @@ const SEAT_SHIFT = { x: 196 - 178, y: 338 - 373 };
 const MISHAP_SCALE = 0.49;
 const { MISHAP_POSES } = PopoGame;
 
-// Where caught fish sit in the bucket, in raft-cell pixels: x, y (the fish's middle) and tilt.
-// The rim is centred at (76, 283); everything below it is inside the bucket and hidden.
-const BUCKET_RIM = { x: 76, y: 284 };
-const PILE = [[76, 272, -0.5], [63, 270, 0.7], [89, 268, -1.0], [71, 255, 0.35], [85, 250, -0.45],
-  [66, 241, 1.0], [79, 232, -0.2], [90, 236, 0.8]];
 
 function frameData(sheet, name) {
   const [row, col] = SHEETS[sheet].frames[name];
@@ -98,7 +93,6 @@ class Popo {
   }
 
   update(dt) {
-    if (this.bucketBump && (this.bucketBump.t += dt) > 1.4) this.bucketBump = null;
     if (this.mishap) {
       this.bobT += dt * 1.1;
       this.swayT += dt * 1.6;
@@ -152,46 +146,6 @@ class Popo {
       raftHeight: 80 * PROP.scale,
       tip: f.rodTip ? { x: ox + (f.rodTip[0] - rx) * s, y: oy + (f.rodTip[1] - ry) * s } : null,
     };
-  }
-
-  drawPileOnProp(ctx) {
-    const k = PROP.scale;
-    ctx.save();
-    ctx.translate(this.anchor.x - PROP.mid * k, this.anchor.y - PROP.bottom * k);
-    ctx.scale(k, k);
-    this.drawBucketPile(ctx);
-    ctx.restore();
-  }
-
-  // Every fish caught so far peeks out of the bucket; the pile wobbles when one lands.
-  drawBucketPile(ctx) {
-    const caught = PopoGame.state.collected;
-    if (!caught.length || !assets.fish) return;
-    const b = this.bucketBump;
-    const wobble = b ? Math.sin(b.t * 22) * 0.18 * Math.exp(-b.t * 3.5) : 0;
-    const hop = b ? Math.max(0, Math.sin(b.t * 14)) * 6 * Math.exp(-b.t * 5) : 0;
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, 80, 160, BUCKET_RIM.y - 80); // above the rim only
-    ctx.clip();
-    ctx.translate(BUCKET_RIM.x, BUCKET_RIM.y);
-    ctx.rotate(wobble);
-    ctx.translate(-BUCKET_RIM.x, -BUCKET_RIM.y - hop);
-    caught.slice(-PILE.length).forEach((key, i) => {
-      const shape = PopoGame.getShape(key);
-      const box = shape && assets.fish.boxes[shape.atlas];
-      if (!box) return;
-      const [x0, y0, x1, y1] = box;
-      const w = x1 - x0, h = y1 - y0, s = 34 / Math.max(w, h);
-      const [x, y, tilt] = PILE[i];
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate(tilt);
-      ctx.scale(i % 2 ? -s : s, s);
-      ctx.drawImage(assets.fish.img, x0, y0, w, h, -w / 2, -h / 2, w, h);
-      ctx.restore();
-    });
-    ctx.restore();
   }
 
   drawRaftProp(ctx) {
@@ -260,7 +214,6 @@ class Popo {
     ctx.save();
     this.applyTransform(ctx);
     this.drawRaftProp(ctx);
-    this.drawPileOnProp(ctx);
     if (this.fade < 1 && this.prevPose) {
       this.drawPose(ctx, this.prevPose, 1 - this.fade);
       this.drawPose(ctx, this.pose, this.fade);
@@ -326,7 +279,7 @@ class Popo {
     // Actual world waterline clipping: the blade enters water without losing length.
     ctx.save();ctx.beginPath();ctx.rect(0,waterline,PopoGame.STAGE_W,PopoGame.STAGE_H);ctx.clip();
     ctx.globalAlpha=.54;drawFigure(this.rowTint());ctx.restore();
-    ctx.save();this.applyTransform(ctx);this.drawRaftProp(ctx);this.drawPileOnProp(ctx);ctx.restore();
+    ctx.save();this.applyTransform(ctx);this.drawRaftProp(ctx);ctx.restore();
     ctx.save();ctx.beginPath();ctx.rect(0,0,PopoGame.STAGE_W,waterline);ctx.clip();drawFigure(assets.rowCycle);ctx.restore();
   }
 
@@ -517,8 +470,6 @@ class Popo {
     drawBody();ctx.restore();
     const raft = this.sourcePoint(186,383);
     this.drawMishapLayer(ctx,0,{x:186,y:383},raft,m.raftAngle);
-    ctx.save(); ctx.translate(raft.x, raft.y); ctx.rotate(m.raftAngle);
-    ctx.translate(-186 * .93, -383 * .93); ctx.scale(.93, .93); this.drawBucketPile(ctx); ctx.restore();
     const rod = this.mishapRod();
     ctx.save();ctx.translate(rod.x,rod.y);ctx.rotate(rod.angle);
     ctx.drawImage(this.mishapArt.rod,-320*.63,-276*.63,620*.63,435*.63);ctx.restore();

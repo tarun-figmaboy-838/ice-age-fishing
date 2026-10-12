@@ -60,13 +60,21 @@ original artwork and tools out of the deployment.
 Title banner with a floating play button (fish circle it) → Popo's entrance: he zooms in
 rowing flat out (honk honk!) as fish dart out of his way, screeches past his spot, boings back,
 swaps paddle for rod in a poof (ta-da!) and fish leap for joy → the narrator's opening lines →
-Triangle Bay, Pentagon Cove, Hexagon Pass (one catch each; Popo says "Great catch!" and the
-reward shows the fish and its name) → Quadrilateral Waters (catch all the quadrilateral fish;
-no trapezium) → a trapezium fish Popo has never seen leaps out of the water ("Woah! I haven't
-seen that one before!" "What kind of fish was that?") → Swiftee the bird flies in and says
-"Let's find out!" on the wing → a Next button → summary. Story lines live in `STORY` in
-`src/levels.js`; Swiftee is `src/swiftee.js` (art from `asset/swiftee.png`, four wing beats
-registered on the belly).
+four levels, each "catch them all": all the triangle fish in Triangle Bay, all the pentagons in
+Pentagon Cove, all the hexagons in Hexagon Pass, then all the quadrilaterals in Quadrilateral
+Waters (no trapezium) — 13 fish in all, each among other shapes. Fish swim in from the left
+and right at random, cross, swim out of view and come back later; one still to catch is always
+in sight. After each catch the fish goes into the bucket and Popo says "Great catch!"; right
+catches in a row make him bounce higher with a party sound → a trapezium fish Popo has never
+seen leaps out of the water ("Woah! I haven't seen that one before!" "What kind of fish was
+that?") → Swiftee the bird flies in and says "Let's find out!" on the wing → Next, which ends
+the journey back on the title. There is no end screen: Next dispatches a `popo:complete` event
+(and posts `{ type: 'popo:complete' }` to a hosting page) for whatever comes next. Story lines
+live in `STORY` in `src/levels.js`; Swiftee is `src/swiftee.js` (art from `asset/swiftee.png`,
+four wing beats registered on the belly).
+
+`python3 tests/playthrough.py` plays the whole journey in headless Chromium (needs Python
+Playwright); `tests/mishap.py` and `tests/rowing.py` cover the wrong-answer reaction and rowing.
 
 ## Voice-overs
 

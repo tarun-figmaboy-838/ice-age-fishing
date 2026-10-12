@@ -111,15 +111,9 @@ async function correctCatch(game, fish) {
     popo.line.tension = 0;
     popo.idle();
     game.collect(fish);
-    popo.bucketBump = { t: 0 }; // it lands in the pile, which wobbles
+    state.phase = PHASE.CELEBRATING;
     state.streak += 1;
     const combo = Math.min(3, state.streak);
-    if (state.collected.length >= game.totalCatches()) {
-      // the very last fish: the bucket overflows
-      fx.splash(bucket.x, bucket.y - 30, true);
-      fx.sparkle(bucket.x, bucket.y - 40, 26);
-      audio.play('boing');
-    }
     game.cheer();
     audio.play('cheer');
     if (combo >= 2) {
@@ -130,18 +124,6 @@ async function correctCatch(game, fish) {
       clock.wait(380, token).then(() => game.storyCue('hop')).catch(() => {});
     }
     await game.say(STORY.catch, token);
-
-    state.phase = PHASE.CELEBRATING;
-    audio.duck(2200);
-    audio.play('success');
-    ui.showReward(fish.shape, combo);
-    // in a catch-them-all challenge the prize is quicker while more are still swimming
-    const more = game.currentChallenge().all && game.remainingTargets().length > 0;
-    await clock.wait(450, token);
-    audio.speak('narrator', `${fish.shape.name}!`);
-    await clock.wait(more ? 1900 : 3350, token);
-    ui.hideReward();
-    await clock.wait(400, token);
     game.afterCatch();
   } catch (e) {
     swallow(e);
@@ -456,16 +438,15 @@ async function tutorial(game) {
   try {
     state.phase = PHASE.TUTORIAL;
     ui.setHitsEnabled(false);
-    for (const f of state.fish) f.frozen = true;
     ui.setInstruction(game.challengeText());
     game.speakInstruction();
-    await clock.wait(900, token);
-    game.showHandOn(state.fish.find((f) => f.key === state.target));
+    // the hand points at a fish to catch once one has swum into view, and follows it around
+    await clock.wait(700, token);
+    while (!game.inViewTarget()) await clock.wait(100, token);
+    game.showHandOn(game.inViewTarget());
     state.phase = PHASE.READY;
     state.idleTime = 0;
     ui.setHitsEnabled(true);
-    await clock.wait(1500, token);
-    for (const f of state.fish) f.frozen = false;
   } catch (e) {
     swallow(e);
   }

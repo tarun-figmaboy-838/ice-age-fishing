@@ -21,7 +21,7 @@ class Fish {
     this.cruise = 52 + Math.random() * 34;
     this.speed = this.cruise;
     this.turn = null;
-    this.turnIn = 4 + Math.random() * 5;
+    this.turnIn = 9 + Math.random() * 8;
     this.wanderIn = 1 + Math.random() * 2.5;
     this.dartIn = 4 + Math.random() * 8;
     this.dart = null;
@@ -42,10 +42,32 @@ class Fish {
     this.alpha = 1;
     this.hinted = false;
     this.gone = false;
+    this.offstage = false; // swimming out of view between visits
+    this.away = 0;
     this.escaping = false;
     this.breath = 2 + Math.random() * 4;
     this.pitch = 0;
     this.lastY = y;
+  }
+
+  // Leave the stage for a while, then swim back in from either side at a new depth.
+  goOffstage(seconds) {
+    this.offstage = true;
+    this.away = seconds;
+    this.turn = null;
+    this.dart = null;
+  }
+
+  enter(area) {
+    this.offstage = false;
+    this.dir = Math.random() < 0.5 ? 1 : -1;
+    this.x = this.dir > 0 ? -this.w / 2 - 12 : STAGE_W + this.w / 2 + 12;
+    this.baseY = area.top + this.h / 2 + Math.random() * (area.bottom - area.top - this.h);
+    this.targetY = this.baseY;
+    this.y = this.baseY;
+    this.lastY = this.y;
+    this.speed = this.cruise;
+    this.turnIn = 9 + Math.random() * 8;
   }
 
   startTurn() {
@@ -111,17 +133,14 @@ class Fish {
       if (this.wiggleT > (this.subtleWiggle ? 0.16 : 0.45)) this.wiggleT = -1;
     }
     if (this.frozen) return;
+    if (this.offstage) {
+      if (!this.escaping && (this.away -= dt) <= 0) this.enter(area);
+      return;
+    }
     if (this.escaping) {
       this.x += this.speed * dt;
       if (PopoGame.state.phase === 'levelTransition') this.alpha = Math.max(0, this.alpha - dt / 0.6);
-      if (this.x > area.right + this.w * 1.5) {
-        this.escaping = false;
-        this.dir = -1;
-        this.speed = this.cruise;
-        this.turnIn = 6 + Math.random() * 5;
-        this.baseY = area.top + this.h / 2 + Math.random() * (area.bottom - area.top - this.h);
-        this.targetY = this.baseY;
-      }
+      if (this.x > STAGE_W + this.w) this.goOffstage(Infinity);
       return;
     }
 
@@ -150,9 +169,6 @@ class Fish {
       }
     }
 
-    const stoppingDistance = this.speed * 0.35 * 0.5 + 3;
-    const edgeDistance = this.dir > 0 ? area.right - this.w / 2 - 10 - this.x : this.x - area.left - this.w / 2 - 10;
-    if (!this.turn && edgeDistance < stoppingDistance) this.startTurn();
     if (!this.turn) {
       let cruise = this.cruise * (1 + Math.sin(this.bobPhase * 0.37) * 0.06);
       if (this.dart) {
@@ -171,13 +187,9 @@ class Fish {
     }
     if (this.trail > 0) this.trail -= dt;
     this.x += this.dir * this.speed * dt;
-    const half = this.w / 2 + 10;
-    if (this.x < area.left + half) {
-      this.x = area.left + half;
-      if (this.dir < 0) this.startTurn();
-    } else if (this.x > area.right - half) {
-      this.x = area.right - half;
-      if (this.dir > 0) this.startTurn();
+    if ((this.dir > 0 && this.x > STAGE_W + this.w / 2 + 14) || (this.dir < 0 && this.x < -this.w / 2 - 14)) {
+      this.goOffstage(0.8 + Math.random() * 2.2);
+      return;
     }
 
     // slow wandering between depths plus a gentle drift
@@ -191,7 +203,7 @@ class Fish {
 
     // keep clear of the other fish
     for (const o of others) {
-      if (o === this || o.gone) continue;
+      if (o === this || o.gone || o.offstage) continue;
       const dx = o.x - this.x;
       const dy = o.baseY - this.baseY;
       const minX = (this.w + o.w) * 0.7;
@@ -212,7 +224,7 @@ class Fish {
   }
 
   draw(ctx) {
-    if (this.gone) return;
+    if (this.gone || this.offstage) return;
     const bob = this.frozen && this.subtleWiggle ? 0 : Math.sin(this.bobPhase) * 2;
     let rot = 0;
     if (this.wiggleT >= 0) {
@@ -262,16 +274,17 @@ class Fish {
 }
 
 // Spread the fish across the swim area so none start on top of each other.
+// A challenge's fish all start out of view and swim in from the left or right, one after
+// another, each a slightly different size so repeated shapes don't look cloned.
 function spawnFish(keys, area, sizeScale = 1) {
-  const lanes = keys.length;
-  const span = area.right - area.left;
   const order = keys.map((k, i) => i).sort(() => Math.random() - 0.5);
-  const depth = area.bottom - area.top;
+  let at = 0;
+  const delays = [];
+  for (let i = 0; i < keys.length; i += 1) { delays[order[i]] = at; at += 0.25 + Math.random() * 0.45; }
   return keys.map((key, i) => {
-    const slot = order[i];
-    const x = area.left + span * ((slot + 0.5) / lanes) + (Math.random() - 0.5) * span * 0.12;
-    const y = area.top + depth * (0.2 + 0.6 * ((slot * 2 + 1) % lanes) / Math.max(1, lanes - 1)) + (Math.random() - 0.5) * 40;
-    return new Fish(key, x, Math.min(area.bottom - 60, Math.max(area.top + 60, y)), Math.random() < 0.5 ? 1 : -1, sizeScale);
+    const fish = new Fish(key, -999, area.top, 1, sizeScale * (0.92 + Math.random() * 0.16));
+    fish.goOffstage(delays[i]);
+    return fish;
   });
 }
 

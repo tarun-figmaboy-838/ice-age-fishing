@@ -21,8 +21,10 @@ BOOT = '''async () => {
  const play=g.audio.play.bind(g.audio);g.audio.play=n=>{qa.sounds.push([n,P.clock.time]);play(n);};
  const splash=g.fx.splash.bind(g.fx);g.fx.splash=(x,y,b)=>{qa.splashes.push({x,y,b,time:P.clock.time});splash(x,y,b);};
  window.step=async(ms,fps=60)=>{for(let n=0;n<ms-0.001;){const d=Math.min(1000/fps,ms-n); if(!s.paused)g.update(d/1000); n+=d;await Promise.resolve();await Promise.resolve();if(qa.phases.at(-1)!==s.phase)qa.phases.push(s.phase);}g.draw();};
- window.wrong=()=>s.fish.find(f=>!P.matchesTarget(f.key,s.target));
- window.right=()=>s.fish.find(f=>P.matchesTarget(f.key,s.target));
+ // fish swim in and out of view; the one a test taps is brought into view first
+ const inView=f=>{if(f&&f.offstage){f.enter(g.area);f.x=700;}return f;};
+ window.wrong=()=>inView(s.fish.find(f=>!f.gone&&!P.matchesTarget(f.key,s.target)));
+ window.right=()=>inView(s.fish.find(f=>!f.gone&&P.matchesTarget(f.key,s.target)));
  g.draw();
 }'''
 

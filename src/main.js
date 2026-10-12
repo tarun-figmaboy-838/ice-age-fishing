@@ -20,8 +20,6 @@ ui.on('pause', () => { audio.play('ui'); game.togglePause(); });
 ui.on('resume', () => { audio.play('ui'); game.togglePause(); });
 ui.on('restart', () => { audio.play('ui'); game.restart(); });
 ui.on('sound', () => { game.toggleSound(); audio.play('ui'); });
-ui.on('heroTap', () => audio.play('wiggle'));
-ui.on('playAgain', () => { audio.play('ui'); game.restart(); ui.el.pause.focus({ preventScroll: true }); });
 ui.on('next', () => { audio.play('ui'); game.next(); });
 
 try {

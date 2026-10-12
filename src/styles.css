@@ -49,7 +49,6 @@ html, body {
   inset: 0;
   transition: filter 0.45s ease;
 }
-.scene.blurred { filter: blur(7px) brightness(0.72) saturate(0.9); }
 .layer {
   position: absolute;
   inset: 0;
@@ -160,9 +159,8 @@ html, body {
 
 /* ---------- story: Popo's speech bubble and the narrator's caption ---------- */
 .speech, .caption { position: absolute; pointer-events: none; z-index: 3; }
-.overlay.reward { z-index: 4; }
 .hud { z-index: 5; }
-.overlay.pause, .overlay.summary { z-index: 6; }
+.overlay.pause { z-index: 6; }
 .speech[hidden], .caption[hidden] { display: none; }
 .line .w { display: inline-block; visibility: hidden; white-space: pre; }
 .line .w.in { visibility: visible; animation: word-in 0.32s cubic-bezier(0.2, 1.8, 0.4, 1); }
@@ -270,7 +268,7 @@ html, body {
 @keyframes fade-in { from { opacity: 0; } }
 @keyframes fade-out { to { opacity: 0; } }
 
-.card, .reward-card {
+.card {
   text-align: center;
   padding: 3em 4em;
   border-radius: 3em;
@@ -280,10 +278,9 @@ html, body {
   max-width: 90%;
   box-sizing: border-box;
 }
-/* only the summary and pause cards may scroll; clipping the prize card would box in its glow */
+/* the pause card may scroll on very small screens */
 .card { max-height: 96%; overflow: auto; }
-.card h2, .reward-name { margin: 0 0 0.3em; font-size: 4.4em; letter-spacing: 0.02em; color: #fff; }
-.card.wide { width: 120em; }
+.card h2 { margin: 0 0 0.3em; font-size: 4.4em; letter-spacing: 0.02em; color: #fff; }
 
 .btn {
   font: inherit;
@@ -310,132 +307,7 @@ html, body {
 .btn:focus-visible { outline: 0.25em solid #fff; outline-offset: 0.2em; }
 .btn:disabled { opacity: 0.5; cursor: default; }
 
-/* reward */
-.reward-card {
-  position: relative;
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-  padding: 0 1em 3em;
-}
-.hud.prize .instruction { opacity: 0; }
 .instruction { transition: opacity 0.3s ease; }
-.hero-fish {
-  font: inherit;
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 36em;
-  height: 36em;
-  margin: 0 auto 0.2em;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  padding: 0;
-  animation: hero-in 0.8s cubic-bezier(0.2, 1.5, 0.4, 1);
-}
-.hero-fish:focus-visible { outline: 0.3em solid #fff; outline-offset: 0.3em; border-radius: 50%; }
-.hero-fish.bounce .fish-img { animation: hero-bounce 0.5s ease; }
-.hero-glow {
-  position: absolute;
-  inset: 4em;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 236, 170, 0.75), rgba(255, 200, 80, 0.35) 45%, rgba(255, 190, 60, 0) 70%);
-  filter: blur(1.2em);
-  animation: glow-breathe 2.2s ease-in-out infinite;
-}
-.prize-burst {
-  position: absolute;
-  left: 50%;
-  top: 18em;
-  width: 90em;
-  height: 90em;
-  transform: translate(-50%, -50%);
-  background: repeating-conic-gradient(from 0deg, rgba(255, 220, 120, 0) 0deg, rgba(255, 220, 120, 0.2) 12deg, rgba(255, 220, 120, 0) 24deg, rgba(255, 220, 120, 0) 45deg);
-  -webkit-mask-image: radial-gradient(circle, #000 20%, transparent 70%);
-  mask-image: radial-gradient(circle, #000 20%, transparent 70%);
-  filter: blur(0.6em);
-  animation: burst-spin 14s linear infinite;
-  pointer-events: none;
-}
-.fish-img { position: relative; display: block; }
-/* streaks: two right catches in a row and the prize fish dances; three and it spins in confetti */
-.reward.combo-2 .fish-img { animation: fish-dance 0.42s ease-in-out 0.75s 4; }
-.reward.combo-3 .fish-img { animation: fish-spin 0.7s cubic-bezier(0.3, 1.4, 0.5, 1) 0.7s, fish-dance 0.42s ease-in-out 1.45s 3; }
-.reward.combo-3 .hero-glow { inset: 1em; }
-@keyframes fish-dance {
-  0%, 100% { transform: rotate(0) translateY(0); }
-  25% { transform: rotate(-12deg) translateY(-1.6em); }
-  75% { transform: rotate(12deg) translateY(-1.6em); }
-}
-@keyframes fish-spin {
-  0% { transform: rotate(0) scale(1); }
-  55% { transform: rotate(200deg) scale(1.18); }
-  100% { transform: rotate(360deg) scale(1); }
-}
-.reward.combo-3 .sparkles i { width: 1.8em; height: 1.1em; clip-path: none; border-radius: 0.2em; animation-duration: 1.7s; animation-iteration-count: 2; }
-.reward.combo-3 .sparkles i:nth-child(3n) { background: #ff6b8b; }
-.reward.combo-3 .sparkles i:nth-child(3n+1) { background: #5fd3ff; }
-.reward.combo-3 .sparkles i:nth-child(3n+2) { background: #8ce05a; }
-.fish-img canvas { display: block; width: 29em !important; height: auto !important; filter: drop-shadow(0 1em 1.6em rgba(0, 0, 0, 0.4)); }
-.sparkles i {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 1.4em;
-  height: 1.4em;
-  background: var(--gold);
-  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
-  animation: sparkle 1.3s ease-out 0.25s both;
-}
-.sparkles i:nth-child(1) { --dx: -20em; --dy: -13em; }
-.sparkles i:nth-child(2) { --dx: 19em; --dy: -15em; animation-delay: 0.35s; }
-.sparkles i:nth-child(3) { --dx: 22em; --dy: 5em; animation-delay: 0.3s; }
-.sparkles i:nth-child(4) { --dx: -22em; --dy: 7em; animation-delay: 0.4s; }
-.sparkles i:nth-child(5) { --dx: -7em; --dy: -21em; animation-delay: 0.45s; }
-.sparkles i:nth-child(6) { --dx: 8em; --dy: 20em; animation-delay: 0.5s; }
-.sparkles i:nth-child(7) { --dx: -15em; --dy: 17em; animation-delay: 0.55s; }
-.sparkles i:nth-child(8) { --dx: 15em; --dy: -19em; animation-delay: 0.6s; }
-@keyframes sparkle {
-  0% { transform: translate(-50%, -50%) scale(0); opacity: 1; }
-  70% { opacity: 1; }
-  100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.1); opacity: 0; }
-}
-@keyframes hero-in { from { transform: scale(0.3); opacity: 0; } }
-@keyframes hero-bounce { 30% { transform: scale(1.12) rotate(-4deg); } 60% { transform: scale(0.96) rotate(3deg); } }
-@keyframes glow-breathe { 50% { transform: scale(1.12); opacity: 0.85; } }
-@keyframes burst-spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
-.reward-name {
-  font-size: 5em;
-  margin: 0 0 0.2em;
-  color: #fff;
-  text-shadow: 0 0.06em 0 rgba(120, 60, 0, 0.5), 0 0.4em 1em rgba(0, 0, 0, 0.4);
-}
-
-/* summary */
-.summary-sub { font-size: 2.3em; margin: 0 0 1em; color: #ffe8bd; }
-.summary-list {
-  list-style: none;
-  margin: 0 0 1.5em;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 1.2em;
-}
-.summary-list li {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.4em;
-  width: 12em;
-  padding: 1em 0.5em;
-  border-radius: 1.4em;
-  background: rgba(255, 255, 255, 0.1);
-  font-size: 1.6em;
-  font-weight: 700;
-}
-.summary-list canvas { width: 5em !important; height: auto !important; }
 
 /* start screen */
 .screen {
@@ -500,6 +372,5 @@ html, body {
 
 @media (prefers-reduced-motion: reduce) {
   .hand, .speech.pop, .caption.pop, .next-btn { animation: none; }
-  .hero-fish, .sparkles i, .hero-glow, .prize-burst, .reward .fish-img { animation: none; }
   .scene { transition: none; }
 }

@@ -93,25 +93,16 @@ KOKORO = {
 AUDITION_LINE = {'narrator': 'Popo *loves* fishing.', 'popo': 'Whoopsie Doopsie!', 'swiftee': "Let's find *out!*"}
 
 INSTRUCTION = 'Clear and encouraging, a little slower so a young child can follow.'
-ANNOUNCE = 'Excited, celebratory announcer naming a prize.'
 
 # (speaker, text exactly as shown in the game with *stressed* words, extra delivery note)
 LINES = [
     ('narrator', 'Popo *loves* fishing.', ''),
     ('narrator', 'And today…', 'Teasing, building suspense.'),
     ('narrator', 'he wants to catch *all* kinds of fish!', 'Big and excited.'),
-    ('narrator', 'Catch the *triangle* fish!', INSTRUCTION),
-    ('narrator', 'Catch the *pentagon* fish!', INSTRUCTION),
-    ('narrator', 'Catch the *hexagon* fish!', INSTRUCTION),
+    ('narrator', 'Catch all the *triangle* fish!', INSTRUCTION),
+    ('narrator', 'Catch all the *pentagon* fish!', INSTRUCTION),
+    ('narrator', 'Catch all the *hexagon* fish!', INSTRUCTION),
     ('narrator', 'Catch all the *quadrilateral* fish!', INSTRUCTION),
-    ('narrator', 'Triangle!', ANNOUNCE),
-    ('narrator', 'Pentagon!', ANNOUNCE),
-    ('narrator', 'Hexagon!', ANNOUNCE),
-    ('narrator', 'Square!', ANNOUNCE),
-    ('narrator', 'Rectangle!', ANNOUNCE),
-    ('narrator', 'Rhombus!', ANNOUNCE),
-    ('narrator', 'Parallelogram!', ANNOUNCE),
-    ('narrator', 'Great fishing, Popo!', 'Proud and joyful.'),
     ('popo', 'Whoopsie Doopsie!', 'Wobbly and embarrassed, then a giggle.'),
     ('popo', '*Great* catch!', 'Delighted and proud.'),
     ('popo', '*Woah!*', 'An amazed gasp.'),

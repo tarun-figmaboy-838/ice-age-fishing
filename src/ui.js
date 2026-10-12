@@ -1,32 +1,7 @@
 (function (PopoGame) {
 'use strict';
-const { assets, SHAPES } = PopoGame;
 
 const $ = (id) => document.getElementById(id);
-
-function polygonPoints(n, r, rotate) {
-  const pts = [];
-  for (let i = 0; i < n; i += 1) {
-    const a = rotate + (i / n) * Math.PI * 2;
-    pts.push(`${(32 + Math.cos(a) * r).toFixed(1)},${(32 + Math.sin(a) * r).toFixed(1)}`);
-  }
-  return pts.join(' ');
-}
-
-// Draws one fish from the atlas into a canvas element, so DOM icons stay crisp at any size.
-function fishCanvas(sprite, size) {
-  const [x0, y0, x1, y1] = assets.fish.boxes[sprite];
-  const w = x1 - x0;
-  const h = y1 - y0;
-  const k = size / Math.max(w, h);
-  const c = document.createElement('canvas');
-  c.width = Math.round(w * k * 2);
-  c.height = Math.round(h * k * 2);
-  c.style.width = `${w * k}px`;
-  c.style.height = `${h * k}px`;
-  c.getContext('2d').drawImage(assets.fish.img, x0, y0, w, h, 0, 0, c.width, c.height);
-  return c;
-}
 
 class UI {
   constructor() {
@@ -34,9 +9,7 @@ class UI {
       hud: $('hud'), hits: $('hits'), hand: $('hand'), start: $('screen-start'), loading: $('loading'), play: $('btn-play'),
       instruction: $('instruction'), instructionText: $('instruction-text'), next: $('btn-next'),
       sound: $('btn-sound'), pause: $('btn-pause'),
-      reward: $('overlay-reward'), rewardFish: $('reward-fish'), rewardImg: $('reward-fish-img'), rewardName: $('reward-name'),
       pauseOverlay: $('overlay-pause'), resume: $('btn-resume'), restart: $('btn-restart'),
-      summary: $('overlay-summary'), summaryList: $('summary-list'), playAgain: $('btn-play-again'),
       rotate: $('rotate-hint'), scene: $('scene'), speech: $('speech'), caption: $('caption'),
     };
     this.handlers = {};
@@ -52,14 +25,7 @@ class UI {
     this.el.pause.addEventListener('click', h('pause'));
     this.el.resume.addEventListener('click', h('resume'));
     this.el.restart.addEventListener('click', h('restart'));
-    this.el.playAgain.addEventListener('click', h('playAgain'));
     this.el.next.addEventListener('click', h('next'));
-    this.el.rewardFish.addEventListener('click', () => {
-      this.el.rewardFish.classList.remove('bounce');
-      void this.el.rewardFish.offsetWidth;
-      this.el.rewardFish.classList.add('bounce');
-      this.emit('heroTap');
-    });
   }
 
   on(name, fn) {
@@ -206,10 +172,6 @@ class UI {
     if (show) this.el.resume.focus();
   }
 
-  setWorldBlur(on) {
-    this.el.scene.classList.toggle('blurred', on);
-  }
-
   // --- fish hit targets -------------------------------------------------
   setHitsEnabled(on) {
     this.hitsEnabled = on;
@@ -219,7 +181,7 @@ class UI {
   syncHits(fishList) {
     const alive = new Set();
     for (const fish of fishList) {
-      if (fish.gone) continue;
+      if (fish.gone || fish.offstage) continue;
       alive.add(fish);
       let btn = this.hitButtons.get(fish);
       if (!btn) {
@@ -253,48 +215,6 @@ class UI {
   hideHand() { this.el.hand.hidden = true; }
   moveHand(x, y) {
     this.el.hand.style.transform = `translate(${(x * this.scale).toFixed(1)}px, ${(y * this.scale).toFixed(1)}px)`;
-  }
-
-  // --- reward ---------------------------------------------------------------
-  // combo: right catches in a row (1-3); a streak makes the prize fish dance, then spin in confetti
-  showReward(shape, combo = 1) {
-    this.el.reward.classList.remove('combo-2', 'combo-3');
-    if (combo >= 2) this.el.reward.classList.add(`combo-${combo}`);
-    this.el.rewardImg.innerHTML = '';
-    this.el.rewardImg.appendChild(fishCanvas(shape.atlas, 240));
-    this.el.rewardName.textContent = shape.name.toUpperCase();
-    this.el.reward.hidden = false;
-    this.el.reward.classList.remove('leave');
-    this.el.hud.classList.add('prize');
-    this.setWorldBlur(true);
-  }
-
-  hideReward() {
-    this.el.reward.classList.add('leave');
-    this.el.hud.classList.remove('prize');
-    this.setWorldBlur(false);
-    setTimeout(() => { this.el.reward.hidden = true; }, 400);
-  }
-
-  // --- summary --------------------------------------------------------------
-  showSummary(discoveredKeys) {
-    this.el.summaryList.innerHTML = '';
-    for (const key of discoveredKeys) {
-      const li = document.createElement('li');
-      li.appendChild(fishCanvas(SHAPES[key].atlas, 70));
-      const name = document.createElement('span');
-      name.textContent = SHAPES[key].name;
-      li.appendChild(name);
-      this.el.summaryList.appendChild(li);
-    }
-    this.el.summary.hidden = false;
-    this.setWorldBlur(true);
-    this.el.playAgain.focus({ preventScroll: true });
-  }
-
-  hideSummary() {
-    this.el.summary.hidden = true;
-    this.setWorldBlur(false);
   }
 
   // --- Next, at the end of the story ----------------------------------------

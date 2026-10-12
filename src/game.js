@@ -111,8 +111,6 @@ class Game {
     this.audio.setTravel(false);
     this.instructionRevert = 0;
     this.transition = null;
-    this.ui.hideReward();
-    this.ui.hideSummary();
     this.ui.showPause(false);
     this.ui.hideHand();
     this.ui.clearHits();
@@ -211,6 +209,25 @@ class Game {
     return state.fish.filter((f) => !f.gone && matchesTarget(f.key, state.target));
   }
 
+  inViewTarget() {
+    return this.remainingTargets().find((f) => !f.offstage && !f.escaping) || null;
+  }
+
+  // Fish swim in and out of view; while a challenge is on, at least one fish still to catch
+  // is always swimming in sight, and the tutorial hand moves to it when its fish swims off.
+  keepTargetsInView() {
+    if (state.phase !== PHASE.READY && state.phase !== PHASE.TUTORIAL) return;
+    const left = this.remainingTargets();
+    if (left.length && !left.some((f) => !f.offstage)) {
+      const soonest = left.reduce((a, b) => (a.away <= b.away ? a : b));
+      soonest.away = Math.min(soonest.away, 0);
+    }
+    if (this.handFish && (this.handFish.gone || this.handFish.offstage)) {
+      const next = this.inViewTarget();
+      if (next) this.handFish = next;
+    }
+  }
+
   // After a catch: a catch-all challenge carries on while matching fish remain.
   afterCatch() {
     if (this.currentChallenge().all && this.remainingTargets().length > 0) {
@@ -266,22 +283,24 @@ class Game {
     this.complete();
   }
 
+  // The end of the journey: tell any page hosting the game, then go back to the title, ready
+  // to play again (there is no end screen).
   complete() {
     state.phase = PHASE.COMPLETE;
     this.ui.setHitsEnabled(false);
-    this.ui.setInstruction(''); // the summary card says it
     this.audio.play('complete');
-    this.audio.speak('narrator', 'Great fishing, Popo!');
-    this.ui.showSummary([...state.discovered]);
+    const detail = { shapes: [...state.discovered] };
+    window.dispatchEvent(new CustomEvent('popo:complete', { detail }));
+    if (window.parent !== window) window.parent.postMessage({ type: 'popo:complete', ...detail }, '*');
+    this.backToTitle();
   }
 
-  // How many fish the whole journey asks for (each catch-them-all target counts).
-  totalCatches() {
-    if (!this.total) {
-      this.total = LOCATIONS.reduce((n, loc) => n + loc.challenges.reduce((m, ch) =>
-        m + (ch.all ? challengeFish(ch).filter((k) => matchesTarget(k, ch.target)).length : 1), 0), 0);
-    }
-    return this.total;
+  backToTitle() {
+    this.reset();
+    this.titleFade = 0;
+    this.audio.stopMusic();
+    this.ui.showStart();
+    this.showIdleScene();
   }
 
   collect(fish) {
@@ -296,7 +315,7 @@ class Game {
     let best = fallback;
     let bestScore = Infinity;
     for (const f of state.fish) {
-      if (f.gone || f.escaping) continue;
+      if (f.gone || f.escaping || f.offstage) continue;
       const r = f.hitRect();
       if (point.x < r.x || point.x > r.x + r.w || point.y < r.y || point.y > r.y + r.h) continue;
       const score = Math.hypot((point.x - f.x) / f.w, (point.y - f.y) / f.h);
@@ -421,7 +440,7 @@ class Game {
 
   onFishTap(tapped, point) {
     const fish = point ? this.fishAt(point, tapped) : tapped;
-    if (state.paused || state.phase !== PHASE.READY || state.selectedFish || fish.gone || fish.escaping) return;
+    if (state.paused || state.phase !== PHASE.READY || state.selectedFish || fish.gone || fish.escaping || fish.offstage) return;
     state.selectedFish = fish;
     state.idleTime = 0;
     for (const f of state.fish) if (f !== fish) f.frozen = false;
@@ -446,7 +465,7 @@ class Game {
   // The tutorial hand stays until the first correct tap, so it comes back after a wrong one.
   restoreTutorialHand() {
     if (!this.tutorialPending || state.phase !== PHASE.READY) return;
-    this.showHandOn(this.remainingTargets()[0]);
+    this.showHandOn(this.inViewTarget());
   }
 
   togglePause() {
@@ -517,7 +536,7 @@ class Game {
     state.idleTime += dt;
     if (state.idleTime > HINT_DELAY && !state.hintShown) {
       state.hintShown = true;
-      const target = this.remainingTargets()[0];
+      const target = this.inViewTarget();
       if (target) target.hinted = true;
       this.ui.pulseTarget();
       this.audio.play('hint');
@@ -992,6 +1011,7 @@ class Game {
       this.popo.line.hook.x = m.x;
       this.popo.line.hook.y = m.y;
     }
+    this.keepTargetsInView();
     if (this.handFish && !this.handFish.gone) this.ui.moveHand(this.handFish.x + 10, this.handFish.y + this.handFish.h * 0.3);
     this.updateHint(dt);
     this.updateInstruction(dt);

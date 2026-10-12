@@ -40,7 +40,7 @@ function level(index) {
 function tapFish(right) {
   const g = game();
   if (state.phase !== PHASE.READY) level(state.phase === PHASE.INTRO ? 0 : state.locationIndex);
-  const fish = state.fish.find((f) => !f.gone && matchesTarget(f.key, state.target) === right);
+  const fish = state.fish.find((f) => !f.gone && !f.offstage && matchesTarget(f.key, state.target) === right);
   if (fish) g.onFishTap(fish, null);
 }
 
@@ -64,15 +64,6 @@ const JUMPS = [
   }],
   ['Mystery fish', () => { const g = game(); atLocation(g, LOCATIONS.length - 1); discovery(g); }],
   ['Swiftee', () => { const g = game(); atLocation(g, LOCATIONS.length - 1); finale(g); }],
-  ['Summary', () => {
-    const g = game();
-    atLocation(g, LOCATIONS.length - 1);
-    for (const loc of LOCATIONS) for (const ch of loc.challenges) {
-      const keys = ch.all ? ch.fish.filter((k) => matchesTarget(k, ch.target)) : [ch.target];
-      for (const k of keys) state.discovered.add(PopoGame.SHAPES[k].shape);
-    }
-    g.complete();
-  }],
 ];
 
 const css = document.createElement('style');
