@@ -36,22 +36,55 @@ const SHAPES = {
   quadrilateral: { shape: 'quadrilateral', name: 'Quadrilateral', sides: 4, categories: ['quadrilateral'] },
 };
 
+// Rendered once from the original art. Stretching a polygon preserves its side count;
+// squares/rhombi use uniform scaling so their more specific classifications stay true.
+const FISH_VARIANTS = {
+  'triangle-tall': { base: 'triangle', sx: 0.78, sy: 1.08, hue: 185 },
+  'triangle-wide': { base: 'triangle', sx: 1.15, sy: 0.78, hue: 45 },
+  'triangle-right-blue': { base: 'triangle-right', sx: 0.85, sy: 1.08, hue: 115 },
+  'pentagon-tall': { base: 'pentagon', sx: 0.78, sy: 1.08, hue: 185 },
+  'pentagon-wide': { base: 'pentagon', sx: 1.15, sy: 0.8, hue: 45 },
+  'pentagon-compact': { base: 'pentagon', sx: 0.9, sy: 0.9, hue: 285 },
+  'hexagon-tall': { base: 'hexagon', sx: 0.8, sy: 1.08, hue: 130 },
+  'hexagon-wide': { base: 'hexagon', sx: 1.15, sy: 0.78, hue: 235 },
+  'hexagon-compact': { base: 'hexagon', sx: 0.9, sy: 0.9, hue: 295 },
+  'square-berry': { base: 'square', sx: 1, sy: 1, hue: 210 },
+  'rectangle-tall': { base: 'rectangle', sx: 0.72, sy: 1.2, hue: 175 },
+  'rhombus-blue': { base: 'rhombus', sx: 0.9, sy: 0.9, hue: 155 },
+  'parallelogram-coral': { base: 'parallelogram', sx: 0.85, sy: 1.1, hue: 265 },
+};
+for (const [key, variant] of Object.entries(FISH_VARIANTS)) {
+  SHAPES[key] = { ...SHAPES[variant.base], atlas: key };
+}
+
+const TARGET_POOLS = {
+  triangle: ['triangle', 'triangle-right', 'triangle-tall', 'triangle-wide', 'triangle-right-blue'],
+  pentagon: ['pentagon', 'pentagon-tall', 'pentagon-wide', 'pentagon-compact'],
+  hexagon: ['hexagon', 'hexagon-tall', 'hexagon-wide', 'hexagon-compact'],
+};
+
 // One challenge per level, and every level is "catch them all": each has several fish of
 // its shape among others, and the level ends once every matching fish is caught. Distractors
 // can never belong to the target's family (a square counts as a rectangle and a rhombus).
 const LOCATIONS = [
   { name: 'Triangle Bay', background: 0, waterline: 388,
     challenges: [{ target: 'triangle', all: true, tutorial: true, fishScale: 0.9,
-      fish: ['triangle', 'triangle-right', 'triangle', 'circle', 'square', 'oval'] }] },
+      targetCount: 3, targetPool: TARGET_POOLS.triangle,
+      others: ['circle', 'square', 'oval', 'pentagon', 'hexagon'], distractorCount: 3 }] },
   { name: 'Pentagon Cove', background: 1, waterline: 390,
     challenges: [{ target: 'pentagon', all: true, fishScale: 0.9,
-      fish: ['pentagon', 'pentagon', 'pentagon', 'hexagon', 'semicircle', 'triangle'] }] },
+      targetCount: 3, targetPool: TARGET_POOLS.pentagon,
+      others: ['hexagon', 'semicircle', 'triangle', 'rectangle', 'oval'], distractorCount: 3 }] },
   { name: 'Hexagon Pass', background: 2, waterline: 387,
     challenges: [{ target: 'hexagon', all: true, fishScale: 0.9,
-      fish: ['hexagon', 'hexagon', 'hexagon', 'pentagon', 'octagon', 'circle'] }] },
+      targetCount: 3, targetPool: TARGET_POOLS.hexagon,
+      others: ['pentagon', 'octagon', 'circle', 'triangle-right', 'rhombus'], distractorCount: 3 }] },
   { name: 'Quadrilateral Waters', background: 3, waterline: 388,
     challenges: [{ target: 'quadrilateral', all: true, fishScale: 0.9,
-      fish: ['square', 'rectangle', 'parallelogram', 'rhombus', 'triangle-right', 'oval'] }] },
+      // Keep all four taught quadrilateral types; the trapezium is the story's surprise.
+      targetGroups: [['square', 'square-berry'], ['rectangle', 'rectangle-tall'],
+        ['parallelogram', 'parallelogram-coral'], ['rhombus', 'rhombus-blue']],
+      others: ['triangle-right', 'oval', 'pentagon', 'hexagon', 'circle'], distractorCount: 2 }] },
 ];
 
 function getShape(key) {
@@ -62,8 +95,34 @@ function matchesTarget(fishKey, targetKey) {
   return SHAPES[fishKey].categories.includes(SHAPES[targetKey].shape);
 }
 
+function shuffleFish(keys) {
+  const result = [...keys];
+  for (let i = result.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
+const previousTargets = new WeakMap();
 function challengeFish(challenge) {
-  return challenge.fish || [challenge.target, ...challenge.others];
+  if (!challenge.targetPool && !challenge.targetGroups) {
+    return [...(challenge.fish || [challenge.target, ...challenge.others])];
+  }
+  const targets = challenge.targetGroups
+    ? challenge.targetGroups.map((group) => shuffleFish(group)[0])
+    : shuffleFish(challenge.targetPool).slice(0, challenge.targetCount);
+  const previous = previousTargets.get(challenge);
+  // Even unlucky random draws must not repeat the same school on consecutive visits.
+  if (previous && targets.every((key) => previous.includes(key))) {
+    const pool = challenge.targetGroups ? challenge.targetGroups[0] : challenge.targetPool;
+    const replacement = pool.find((key) => !targets.includes(key));
+    if (replacement) targets[0] = replacement;
+  }
+  previousTargets.set(challenge, [...targets]);
+  const others = shuffleFish(challenge.others.filter((key) => !matchesTarget(key, challenge.target)))
+    .slice(0, challenge.distractorCount);
+  return shuffleFish([...targets, ...others]);
 }
 
 // Story lines, delivered word by word. *Stressed* words land bigger with a boing, and a cue
@@ -93,5 +152,5 @@ const STORY = {
 };
 
 
-Object.assign(PopoGame, { TERMS, SHAPES, LOCATIONS, STORY, getShape, matchesTarget, challengeFish });
+Object.assign(PopoGame, { TERMS, SHAPES, FISH_VARIANTS, LOCATIONS, STORY, getShape, matchesTarget, challengeFish, shuffleFish });
 })(window.PopoGame = window.PopoGame || {});

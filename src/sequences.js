@@ -471,9 +471,13 @@ async function popoArrives(game, token) {
     audio.setTravel(true);
     let lastBlade = popo.paddleTip();
     let lastWake = 0;
-    // a fish or two dart out of the way somewhere ahead of the raft
-    const darting = shuffled(JUMPERS);
-    const scatter = reduced ? [] : [[darting[0], between(400, 450)], [darting[1], between(500, 560)]].slice(0, Math.random() < 0.4 ? 1 : 2);
+    // a fish or two flee ahead of the speeding raft and leap out of its way
+    if (!reduced) {
+      shuffled(JUMPERS).slice(0, Math.random() < 0.4 ? 1 : 2).forEach((shape, i) => {
+        clock.wait(i * 260, token).then(() => jump(game, token, shape, between(430, 520) + i * 110, 1,
+          { height: between(120, 170), ms: between(650, 800), scale: between(0.5, 0.62), speed: between(720, 840) })).catch(() => {});
+      });
+    }
     const zoom = reduced ? 1300 : 1500;
     await clock.tween(zoom, token, (t) => {
       const elapsed = t * zoom;
@@ -487,12 +491,6 @@ async function popoArrives(game, token) {
         audio.play('paddle');
       }
       lastBlade = blade;
-      // fish leap out of the way as the raft comes zooming through
-      const bow = popo.placement('fishing', 'idle').raftRightX + popo.travelShift;
-      if (scatter.length && bow > scatter[0][1] - 60) {
-        const [shape, x] = scatter.shift();
-        jump(game, token, shape, x, 1, { dx: between(130, 210), height: between(110, 180), ms: between(650, 850), scale: between(0.5, 0.65) }).catch(() => {});
-      }
       if (elapsed - lastWake > 160) {
         lastWake = elapsed;
         const stern = popo.placement('fishing', 'idle').raftLeftX + popo.travelShift;
@@ -504,7 +502,9 @@ async function popoArrives(game, token) {
     audio.setTravel(false);
     const held = popo.rowing.time;
     if (overshoot) {
-      // brakes! the raft screeches past the spot, squashing up in a fan of spray
+      // brakes! the raft screeches past the spot, squashing up in a fan of spray; fish swim
+      // over to see what the fuss is about
+      fishSaysHello(game, token);
       audio.play('skid');
       audio.play('woah');
       let lastSpray = 0;
@@ -545,28 +545,50 @@ async function popoArrives(game, token) {
   audio.play('tada');
   fx.sparkle(popo.headTop().x + 40, popo.headTop().y + 50, 18);
   await clock.wait(380, token);
-  // a happy hop, and a fish leaps up to say hello
+  // a happy hop while the fish leap around him
   game.storyCue('hop');
-  await fishSaysHello(game, token);
-  await clock.wait(250, token);
+  await clock.wait(900, token);
 }
 
-// One fish jumps out of the water in an arc and dives back in, with a splash each way.
-async function jump(game, token, shape, x0, dir, { dx = 150, height = 190, ms = 900, scale = 0.7 } = {}) {
+// One fish swims in from the edge of the water (from the left or right), leaps out with a
+// splash each way, and swims on out of view on the other side, like the fish in the game.
+async function jump(game, token, shape, x0, dir, { height = 190, ms = 900, scale = 0.7, speed = 600 } = {}) {
   const { fx, audio } = game;
   const wl = game.waterline;
-  const fish = new Fish(shape, x0, wl + 30, dir, scale);
+  const surface = wl + 30;
+  const depth = wl + 110 + Math.random() * 70;
+  const enterX = dir > 0 ? -80 : STAGE_W + 80;
+  const exitX = dir > 0 ? STAGE_W + 80 : -80;
+  const dx = speed * (ms / 1000) * 0.45; // the leap carries its run-up speed
+  const fish = new Fish(shape, enterX, depth, dir, scale);
   game.leapers.push(fish);
   let out = false;
   let back = false;
+  let rippled = false;
+  let lastBubble = 0;
   try {
+    await clock.tween(Math.abs(x0 - enterX) / speed * 1000, token, (t) => {
+      fish.x = enterX + (x0 - enterX) * t;
+      const rise = Math.max(0, (t - 0.6) / 0.4); // swims level, then up toward the surface
+      fish.y = depth + (surface - depth) * rise * rise;
+      fish.pitch = -0.5 * rise;
+      if (t - lastBubble > 0.15) { lastBubble = t; fx.puff(fish.x - dir * fish.w * 0.45, fish.y, -dir, 1); }
+      if (!rippled && t > 0.9) { rippled = true; fx.ripple(x0, wl, 0.7); }
+    });
     audio.play('leap');
     await clock.tween(ms, token, (t) => {
       fish.x = x0 + dir * dx * t;
-      fish.y = wl + 30 - height * 4 * t * (1 - t);
+      fish.y = surface - height * 4 * t * (1 - t);
       fish.pitch = Math.max(-0.8, Math.min(0.8, -(1 - 2 * t) * 0.9));
       if (!out && fish.y < wl) { out = true; fx.splash(fish.x, wl, false); audio.play('splashSmall'); }
       if (out && !back && t > 0.5 && fish.y > wl) { back = true; fx.splash(fish.x, wl, true); audio.play('splashSmall'); }
+    });
+    const x1 = fish.x;
+    await clock.tween(Math.abs(exitX - x1) / speed * 1000, token, (t) => {
+      fish.x = x1 + (exitX - x1) * t;
+      const dive = Math.min(1, t / 0.25);
+      fish.y = surface + (depth - surface) * (1 - (1 - dive) ** 2);
+      fish.pitch = 0.6 * (1 - dive);
     });
   } finally {
     game.leapers = game.leapers.filter((f) => f !== fish);
@@ -579,21 +601,20 @@ const anyOf = (list) => list[Math.floor(Math.random() * list.length)];
 // a different fish each time, in a random order
 const shuffled = (list) => list.map((x) => [Math.random(), x]).sort((a, b) => a[0] - b[0]).map((p) => p[1]);
 
-// A few fish leap for joy around the raft at uneven moments, each its own size, height,
-// speed and direction. Resolves after the first ones; the rest finish on their own.
-async function fishSaysHello(game, token) {
+// A few fish swim in from either side and leap for joy beside the raft, each at its own
+// moment, size, height and speed, then swim away. They run on their own.
+function fishSaysHello(game, token) {
   const raft = game.popo.placement('fishing', 'idle').raftRightX;
   const count = 3 + Math.floor(Math.random() * 2);
   const fish = shuffled(JUMPERS);
   let at = 0;
   for (let i = 0; i < count; i += 1) {
-    at += between(120, 420);
-    const dir = Math.random() < 0.65 ? 1 : -1;
-    const x0 = between(raft + 60, raft + 620);
-    const opts = { dx: between(90, 200), height: between(110, 220), ms: between(700, 980), scale: between(0.5, 0.68) };
+    at += between(100, 380);
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    const x0 = between(raft + 150, raft + 640); // clear of the raft
+    const opts = { height: between(110, 220), ms: between(700, 950), scale: between(0.5, 0.68), speed: between(560, 720) };
     clock.wait(at, token).then(() => jump(game, token, fish[i], x0, dir, opts)).catch(() => {});
   }
-  await clock.wait(900, token);
 }
 
 // The journey opens with the narrator; then the first fish swim in and the tutorial starts.

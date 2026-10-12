@@ -9,8 +9,10 @@ class Fish {
   constructor(key, x, y, dir, sizeScale = 1) {
     this.key = key;
     this.shape = getShape(key);
-    this.box = assets.fish.boxes[this.shape.atlas];
-    this.mouth = assets.fish.mouths[this.shape.atlas];
+    const variant = assets.fish.variants[this.shape.atlas];
+    this.img = variant ? variant.img : assets.fish.img;
+    this.box = variant ? variant.box : assets.fish.boxes[this.shape.atlas];
+    this.mouth = variant ? variant.mouth : assets.fish.mouths[this.shape.atlas];
     this.w = (this.box[2] - this.box[0]) * FISH_SCALE * sizeScale;
     this.h = (this.box[3] - this.box[1]) * FISH_SCALE * sizeScale;
     this.x = x;
@@ -21,7 +23,7 @@ class Fish {
     this.cruise = 52 + Math.random() * 34;
     this.speed = this.cruise;
     this.turn = null;
-    this.turnIn = 9 + Math.random() * 8;
+    this.turnIn = 4 + Math.random() * 5;
     this.wanderIn = 1 + Math.random() * 2.5;
     this.dartIn = 4 + Math.random() * 8;
     this.dart = null;
@@ -42,6 +44,7 @@ class Fish {
     this.alpha = 1;
     this.hinted = false;
     this.gone = false;
+    this.roam = false; // gameplay fish swim in and out of view; title fish stay in their area
     this.offstage = false; // swimming out of view between visits
     this.away = 0;
     this.escaping = false;
@@ -169,6 +172,12 @@ class Fish {
       }
     }
 
+    if (!this.roam && !this.turn) {
+      // fish that keep to an area turn before reaching its edge
+      const stoppingDistance = this.speed * 0.35 * 0.5 + 3;
+      const edgeDistance = this.dir > 0 ? area.right - this.w / 2 - 10 - this.x : this.x - area.left - this.w / 2 - 10;
+      if (edgeDistance < stoppingDistance) this.startTurn();
+    }
     if (!this.turn) {
       let cruise = this.cruise * (1 + Math.sin(this.bobPhase * 0.37) * 0.06);
       if (this.dart) {
@@ -187,9 +196,20 @@ class Fish {
     }
     if (this.trail > 0) this.trail -= dt;
     this.x += this.dir * this.speed * dt;
-    if ((this.dir > 0 && this.x > STAGE_W + this.w / 2 + 14) || (this.dir < 0 && this.x < -this.w / 2 - 14)) {
-      this.goOffstage(0.8 + Math.random() * 2.2);
-      return;
+    if (this.roam) {
+      if ((this.dir > 0 && this.x > STAGE_W + this.w / 2 + 14) || (this.dir < 0 && this.x < -this.w / 2 - 14)) {
+        this.goOffstage(0.8 + Math.random() * 2.2);
+        return;
+      }
+    } else {
+      const half = this.w / 2 + 10;
+      if (this.x < area.left + half) {
+        this.x = area.left + half;
+        if (this.dir < 0) this.startTurn();
+      } else if (this.x > area.right - half) {
+        this.x = area.right - half;
+        if (this.dir > 0) this.startTurn();
+      }
     }
 
     // slow wandering between depths plus a gentle drift
@@ -260,7 +280,7 @@ class Fish {
     ctx.rotate(this.drawTurn);
     ctx.scale(this.dir * this.scale, this.scale);
     const [x0, y0, x1, y1] = this.box;
-    ctx.drawImage(assets.fish.img, x0, y0, x1 - x0, y1 - y0, -this.w / 2, -this.h / 2, this.w, this.h);
+    ctx.drawImage(this.img, x0, y0, x1 - x0, y1 - y0, -this.w / 2, -this.h / 2, this.w, this.h);
     ctx.restore();
   }
 
@@ -274,15 +294,31 @@ class Fish {
 }
 
 // Spread the fish across the swim area so none start on top of each other.
-// A challenge's fish all start out of view and swim in from the left or right, one after
-// another, each a slightly different size so repeated shapes don't look cloned.
+// Fish spread across an area that they keep to (the title's fish).
 function spawnFish(keys, area, sizeScale = 1) {
-  const order = keys.map((k, i) => i).sort(() => Math.random() - 0.5);
+  const lanes = keys.length;
+  const span = area.right - area.left;
+  const order = PopoGame.shuffleFish(keys.map((k, i) => i));
+  const depth = area.bottom - area.top;
+  return keys.map((key, i) => {
+    const slot = order[i];
+    const x = area.left + span * ((slot + 0.5) / lanes) + (Math.random() - 0.5) * span * 0.12;
+    const y = area.top + depth * (0.2 + 0.6 * ((slot * 2 + 1) % lanes) / Math.max(1, lanes - 1)) + (Math.random() - 0.5) * 40;
+    return new Fish(key, x, Math.min(area.bottom - 60, Math.max(area.top + 60, y)), Math.random() < 0.5 ? 1 : -1, sizeScale);
+  });
+}
+
+// A challenge's fish all start out of view and swim in from the left or right, one after
+// another, each a slightly different size so repeated shapes don't look cloned. They roam:
+// across and out of view, then back in later.
+function spawnSwimmers(keys, area, sizeScale = 1) {
+  const order = PopoGame.shuffleFish(keys.map((k, i) => i));
   let at = 0;
   const delays = [];
   for (let i = 0; i < keys.length; i += 1) { delays[order[i]] = at; at += 0.25 + Math.random() * 0.45; }
   return keys.map((key, i) => {
     const fish = new Fish(key, -999, area.top, 1, sizeScale * (0.92 + Math.random() * 0.16));
+    fish.roam = true;
     fish.goOffstage(delays[i]);
     return fish;
   });
@@ -403,5 +439,5 @@ function refreshShadows(current, count, area) {
   return [...current.filter((s) => s.leaving && !s.gone), ...staying, ...fresh].sort((a, b) => b.depth - a.depth);
 }
 
-Object.assign(PopoGame, { FISH_SCALE, Fish, spawnFish, refreshShadows });
+Object.assign(PopoGame, { FISH_SCALE, Fish, spawnFish, spawnSwimmers, refreshShadows });
 })(window.PopoGame = window.PopoGame || {});

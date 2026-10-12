@@ -1,6 +1,6 @@
 (function (PopoGame) {
 'use strict';
-const { assets, preloadBackground, clock, Effects, WaterScene, surfaceWave, PAN_OVERLAP, spawnFish, refreshShadows, LOCATIONS, STORY, matchesTarget, challengeFish, getShape, Popo, correctCatch, wrongCatch, travelTo, tutorial, opening, discovery, mouthOf, Cancelled, STAGE_W, STAGE_H, swimArea, raftAnchor, state, PHASE, resetProgress, newToken, isCurrent } = PopoGame;
+const { assets, preloadBackground, clock, Effects, WaterScene, surfaceWave, PAN_OVERLAP, spawnFish, spawnSwimmers, refreshShadows, LOCATIONS, STORY, matchesTarget, challengeFish, getShape, Popo, correctCatch, wrongCatch, travelTo, tutorial, opening, discovery, mouthOf, Cancelled, STAGE_W, STAGE_H, swimArea, raftAnchor, state, PHASE, resetProgress, newToken, isCurrent } = PopoGame;
 
 const HINT_DELAY = 4;
 
@@ -184,7 +184,7 @@ class Game {
     const ch = this.currentChallenge();
     state.target = ch.target;
     state.selectedFish = null;
-    state.fish = spawnFish(challengeFish(ch), this.area, ch.fishScale || 1);
+    state.fish = spawnSwimmers(challengeFish(ch), this.area, ch.fishScale || 1);
     // fewer background shadows when the challenge itself is busy
     this.ambient = refreshShadows(this.ambient, Math.max(3, Math.min(5, 8 - state.fish.length)), this.area);
     state.idleTime = 0;
