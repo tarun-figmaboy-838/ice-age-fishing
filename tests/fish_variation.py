@@ -30,7 +30,7 @@ with sync_playwright() as p:
               const signature = [...targets].sort().join(',');
               check(signature !== last, 'Repeated school: ' + signature);
               last = signature;
-              check(!keys.includes('trapezium'), 'Spoiled mystery fish');
+              check(!keys.some(k => P.getShape(k).shape === 'trapezium'), 'Spoiled mystery fish');
               if (ch.target === 'quadrilateral') {
                 check(new Set(targets.map(k => P.getShape(k).shape)).size === 4, 'Lost quad types');
               }
@@ -68,7 +68,7 @@ with sync_playwright() as p:
           popoDebug.state.collected.length === beforeCatch + 1 &&
           popoDebug.state.collected.at(-1) === testFish.key && popoDebug.state.phase === 'ready'
         '''), key
-    print('PASS: all 13 generated fish caught and collected through real catch animations', flush=True)
+    print(f'PASS: all {len(result)} new fish caught and collected through real catch animations', flush=True)
 
     # Contact sheet for visual review of the actual cached sprites at game size.
     page.evaluate('''() => {
@@ -78,12 +78,8 @@ with sync_playwright() as p:
       canvas.style = 'position:fixed;inset:0;z-index:9999;width:1400px;height:920px';
       document.body.append(canvas);
       const ctx = canvas.getContext('2d'); ctx.fillStyle = '#e7f5ff'; ctx.fillRect(0,0,1400,920);
-      const groups = [
-        ['triangle','triangle-right','triangle-tall','triangle-wide','triangle-right-blue'],
-        ['pentagon','pentagon-tall','pentagon-wide','pentagon-compact'],
-        ['hexagon','hexagon-tall','hexagon-wide','hexagon-compact'],
-        ['square-berry','rectangle-tall','parallelogram-coral','rhombus-blue']
-      ];
+      const of = base => Object.keys(P.FISH_VARIANTS).filter(k => P.FISH_VARIANTS[k].base === base);
+      const groups = [of('triangle'), of('pentagon'), of('hexagon'), [...of('rhombus'), ...of('trapezium')].slice(0, 5)];
       groups.forEach((keys,row) => keys.forEach((key,col) => {
         const f = new P.Fish(key,140+col*275,110+row*225,1,1.25);
         f.draw(ctx); ctx.fillStyle='#173b52'; ctx.font='17px sans-serif';ctx.textAlign='center';

@@ -36,31 +36,19 @@ const SHAPES = {
   quadrilateral: { shape: 'quadrilateral', name: 'Quadrilateral', sides: 4, categories: ['quadrilateral'] },
 };
 
-// Rendered once from the original art. Stretching a polygon preserves its side count;
-// squares/rhombi use uniform scaling so their more specific classifications stay true.
-const FISH_VARIANTS = {
-  'triangle-tall': { base: 'triangle', sx: 0.78, sy: 1.08, hue: 185 },
-  'triangle-wide': { base: 'triangle', sx: 1.15, sy: 0.78, hue: 45 },
-  'triangle-right-blue': { base: 'triangle-right', sx: 0.85, sy: 1.08, hue: 115 },
-  'pentagon-tall': { base: 'pentagon', sx: 0.78, sy: 1.08, hue: 185 },
-  'pentagon-wide': { base: 'pentagon', sx: 1.15, sy: 0.8, hue: 45 },
-  'pentagon-compact': { base: 'pentagon', sx: 0.9, sy: 0.9, hue: 285 },
-  'hexagon-tall': { base: 'hexagon', sx: 0.8, sy: 1.08, hue: 130 },
-  'hexagon-wide': { base: 'hexagon', sx: 1.15, sy: 0.78, hue: 235 },
-  'hexagon-compact': { base: 'hexagon', sx: 0.9, sy: 0.9, hue: 295 },
-  'square-berry': { base: 'square', sx: 1, sy: 1, hue: 210 },
-  'rectangle-tall': { base: 'rectangle', sx: 0.72, sy: 1.2, hue: 175 },
-  'rhombus-blue': { base: 'rhombus', sx: 0.9, sy: 0.9, hue: 155 },
-  'parallelogram-coral': { base: 'parallelogram', sx: 0.85, sy: 1.1, hue: 265 },
-};
-for (const [key, variant] of Object.entries(FISH_VARIANTS)) {
-  SHAPES[key] = { ...SHAPES[variant.base], atlas: key };
+// More fish of each shape, drawn in new colours and patterns (asset/fish-variants.png, cut and
+// measured by tools/build-assets.py). Each is its base shape for every purpose but its art.
+const FISH_VARIANTS = {};
+for (const [key, base] of Object.entries(PopoGame.FISH_VARIANT_ATLAS.bases)) {
+  FISH_VARIANTS[key] = { base };
+  SHAPES[key] = { ...SHAPES[base], atlas: key };
 }
+const variantsOf = (base) => Object.keys(FISH_VARIANTS).filter((key) => FISH_VARIANTS[key].base === base);
 
 const TARGET_POOLS = {
-  triangle: ['triangle', 'triangle-right', 'triangle-tall', 'triangle-wide', 'triangle-right-blue'],
-  pentagon: ['pentagon', 'pentagon-tall', 'pentagon-wide', 'pentagon-compact'],
-  hexagon: ['hexagon', 'hexagon-tall', 'hexagon-wide', 'hexagon-compact'],
+  triangle: ['triangle', 'triangle-right', ...variantsOf('triangle')],
+  pentagon: ['pentagon', ...variantsOf('pentagon')],
+  hexagon: ['hexagon', ...variantsOf('hexagon')],
 };
 
 // One challenge per level, and every level is "catch them all": each has several fish of
@@ -82,8 +70,7 @@ const LOCATIONS = [
   { name: 'Quadrilateral Waters', background: 3, waterline: 388,
     challenges: [{ target: 'quadrilateral', all: true, fishScale: 0.9,
       // Keep all four taught quadrilateral types; the trapezium is the story's surprise.
-      targetGroups: [['square', 'square-berry'], ['rectangle', 'rectangle-tall'],
-        ['parallelogram', 'parallelogram-coral'], ['rhombus', 'rhombus-blue']],
+      targetGroups: [['square'], ['rectangle'], ['parallelogram'], ['rhombus', ...variantsOf('rhombus')]],
       others: ['triangle-right', 'oval', 'pentagon', 'hexagon', 'circle'], distractorCount: 2 }] },
 ];
 
@@ -115,9 +102,14 @@ function challengeFish(challenge) {
   const previous = previousTargets.get(challenge);
   // Even unlucky random draws must not repeat the same school on consecutive visits.
   if (previous && targets.every((key) => previous.includes(key))) {
-    const pool = challenge.targetGroups ? challenge.targetGroups[0] : challenge.targetPool;
-    const replacement = pool.find((key) => !targets.includes(key));
-    if (replacement) targets[0] = replacement;
+    const groups = challenge.targetGroups || [challenge.targetPool];
+    for (let i = 0; i < groups.length; i += 1) {
+      const replacement = groups[i].find((key) => !targets.includes(key));
+      if (replacement) {
+        targets[challenge.targetGroups ? i : 0] = replacement;
+        break;
+      }
+    }
   }
   previousTargets.set(challenge, [...targets]);
   const others = shuffleFish(challenge.others.filter((key) => !matchesTarget(key, challenge.target)))
@@ -138,7 +130,7 @@ const STORY = {
   // after the last level, a fish Popo has never seen leaps out of the water; then Swiftee the
   // bird flies in with the answer to Popo's question and the Next button appears
   ending: {
-    fish: 'trapezium',
+    fish: ['trapezium', ...variantsOf('trapezium')], // one at random each journey
     woah: [
       { who: 'popo', text: '*Woah!*', cue: { word: 0, do: 'exclaim' } },
       { who: 'popo', text: "I haven't seen *that* one before!" },

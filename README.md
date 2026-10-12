@@ -73,19 +73,18 @@ the journey back on the title. There is no end screen: Next dispatches a `popo:c
 live in `STORY` in `src/levels.js`; Swiftee is `src/swiftee.js` (art from `asset/swiftee.png`,
 four wing beats registered on the belly).
 
-Each level now draws distinct target fish from a variant pool and shuffles its distractors.
-Thirteen additional fish sprites are generated once at load time from the existing artwork,
-with new colors and proportions that preserve each shape's classification. Quadrilateral
-Waters still includes a square, rectangle, parallelogram and rhombus. Consecutive visits to
-a level cannot select the same target set, and caught fish keep their appearance throughout
-the catch animation. Variant definitions and selection live in `src/levels.js`.
-They are coloured with a canvas hue-rotate filter, or, where that is missing (Safari and every
-iOS browser), with a "hue" blend that keeps the eyes white and the outlines dark.
+Each level draws a different school of target fish and shuffles its distractors, so a replay
+never repeats the same set. Besides the original fish there are 23 more, drawn in new colours
+and patterns (`asset/fish-variants.png`, cut, sized and measured by `tools/build-assets.py`
+into `assets/sprites/fish-variants.webp`): five triangles, five pentagons, five hexagons, two
+rhombuses for Quadrilateral Waters, and six trapeziums, one of which is the mystery fish at the
+end of each journey. The sheet's other two four-sided fish have no parallel sides; they read
+as trapeziums, so they are left out of the "every quadrilateral but the trapezium" level.
 
 `python3 tests/playthrough.py` plays the whole journey in headless Chromium (needs Python
 Playwright); `tests/mishap.py` and `tests/rowing.py` cover the wrong-answer reaction and rowing.
 `python3 tests/fish_variation.py` checks school diversity, replay selection, sprite rendering
-and correct catches for every generated variant.
+and a real catch of every new fish.
 
 ## Voice-overs
 

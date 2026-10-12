@@ -30,6 +30,18 @@ TITLE = 'title-banner.png'
 PLAY_BUTTON = 'play-button.png'
 HINT_HAND = 'hint-hand.png'
 SWIFTEE = 'swiftee.png'
+# More fish of each shape, in new colours and patterns (a 5x5 sheet on a transparent ground).
+# Measured from the art: six of its four-sided fish are trapeziums (one pair of parallel
+# sides), used for the end-of-journey mystery fish; two have no parallel sides and are left
+# out, because they read as trapeziums and level 4 is "every quadrilateral but the trapezium".
+FISH_VARIANT_SHEET = 'fish-variants.png'
+VARIANT_GRID = [
+    ['triangle-red', 'triangle-orange', 'triangle-yellow', 'triangle-green', 'triangle-pink'],
+    ['trapezium-blue', 'trapezium-purple', 'trapezium-red', 'rhombus-teal', 'trapezium-yellow'],
+    ['pentagon-pink', 'pentagon-orange', 'pentagon-blue', 'pentagon-green', 'pentagon-purple'],
+    ['hexagon-yellow', 'hexagon-teal', 'hexagon-pink', 'hexagon-orange', 'hexagon-blue'],
+    ['trapezium-green', None, None, 'trapezium-gold', 'rhombus-red'],
+]
 # Popo's poses: 3x3 sheets of the character with his rod or paddle only (no raft, line or hook).
 FISHING = 'popo-fishing-clean.png'
 ROWING = 'popo-paddling.png'
@@ -141,7 +153,7 @@ def is_pure_fringe(r, g, b):
     return (r > 170 and g < 70 and b < 70) or (r > 200 and g > 185 and b < 80)
 
 
-def cut_figures(im, count):
+def cut_figures(im, count, defringe=True):
     """Generated sheets can have red/yellow specks scattered around the figures and figures
     that cross their grid lines. Find each whole figure by shape (thin specks don't survive an
     opening) and cut it out with its soft edge, as (centre y, centre x, cropped figure)."""
@@ -160,7 +172,7 @@ def cut_figures(im, count):
         fig.paste(im, (0, 0), keep)
         fp = fig.load()
         box = keep.getbbox()
-        for _ in range(2):
+        for _ in range(2 if defringe else 0):
             drop = [(x, y) for y in range(max(1, box[1]), min(im.size[1] - 1, box[3]))
                     for x in range(max(1, box[0]), min(im.size[0] - 1, box[2]))
                     if fp[x, y][3] and is_pure_fringe(*fp[x, y][:3])
@@ -310,6 +322,46 @@ def build_fish_atlas():
     return atlas, boxes, mouths
 
 
+def build_fish_variants(fish_boxes):
+    """Cuts the extra fish out whole (the sheet is clean, so no speck removal, which would
+    thin red and yellow outlines), sizes each like the original fish of its shape, and packs
+    them into one atlas. Scaling is premultiplied so the coloured glow kept under fully
+    transparent pixels can't bleed into the edges."""
+    sheet = Image.open(os.path.join(SRC, FISH_VARIANT_SHEET)).convert('RGBA')
+    figures = sorted(cut_figures(sheet, 25, defringe=False), key=lambda f: f[0])
+    rows = [sorted(figures[i:i + 5], key=lambda f: f[1]) for i in range(0, 25, 5)]
+    sprites = []
+    for r, names in enumerate(VARIANT_GRID):
+        for c, key in enumerate(names):
+            if not key:
+                continue
+            fig = rows[r][c][2]
+            base = key.split('-')[0]
+            x0, y0, x1, y1 = fish_boxes[base]
+            k = max(x1 - x0, y1 - y0) / max(fig.size)
+            fig = fig.convert('RGBa').resize((round(fig.size[0] * k), round(fig.size[1] * k)), Image.LANCZOS).convert('RGBA')
+            sprites.append((key, base, fig))
+    pad, width = 8, 2048
+    x = y = row_h = 0
+    places = []
+    for key, base, piece in sprites:
+        if x + piece.size[0] + pad > width:
+            x, y, row_h = 0, y + row_h + pad, 0
+        places.append((key, base, piece, x, y))
+        x += piece.size[0] + pad
+        row_h = max(row_h, piece.size[1])
+    atlas = Image.new('RGBA', (width, y + row_h), (0, 0, 0, 0))
+    boxes, mouths, bases = {}, {}, {}
+    for key, base, piece, px_, py_ in places:
+        atlas.alpha_composite(piece, (px_, py_))
+        boxes[key] = [px_, py_, px_ + piece.size[0], py_ + piece.size[1]]
+        mouths[key] = find_mouth(piece)
+        bases[key] = base
+    atlas.save(os.path.join(OUT, 'sprites', 'fish-variants.webp'), 'WEBP', quality=90, method=6)
+    print('fish variants', len(boxes), atlas.size)
+    return dict(width=atlas.size[0], height=atlas.size[1], boxes=boxes, mouths=mouths, bases=bases)
+
+
 def water_mask(im):
     """Where the surface waves may move the painting: open water, not the snow, ice shelves and
     icebergs along the shoreline. Light pixels in the shoreline band that join the snow above are
@@ -436,6 +488,7 @@ def main():
     fish, boxes, mouths = build_fish_atlas()
     fish.save(os.path.join(OUT, 'sprites', 'fish.webp'), 'WEBP', quality=90, method=6)
     data['fish'] = dict(width=fish.size[0], height=fish.size[1], boxes=boxes, mouths=mouths)
+    data['variants'] = build_fish_variants(boxes)
     data['swiftee'] = build_swiftee()
     print('fish atlas', len(boxes), 'sprites')
 
@@ -461,6 +514,7 @@ def main():
         fh.write('window.PopoGame = window.PopoGame || {};\n')
         fh.write('PopoGame.SHEET_DATA = ' + json.dumps(data['sheets'], indent=1) + ';\n')
         fh.write('PopoGame.FISH_ATLAS = ' + json.dumps(data['fish']) + ';\n')
+        fh.write('PopoGame.FISH_VARIANT_ATLAS = ' + json.dumps(data['variants']) + ';\n')
         fh.write('PopoGame.SWIFTEE_DATA = ' + json.dumps(data['swiftee']) + ';\n')
     print('wrote src/sprite-data.js')
 

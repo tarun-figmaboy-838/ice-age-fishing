@@ -14,52 +14,12 @@ const assets = {
 
 const pending = new Map();
 
-// Canvas filters (hue-rotate) don't exist in Safari, so on iPhones and iPads every variant
-// would keep its base colour. Check once by tinting a red pixel (no image, so never tainted).
-function canvasFiltersWork() {
-  const c = document.createElement('canvas');
-  c.width = c.height = 1;
-  const g = c.getContext('2d');
-  g.filter = 'hue-rotate(120deg)';
-  g.fillStyle = '#f00';
-  g.fillRect(0, 0, 1, 1);
-  const [r, green] = g.getImageData(0, 0, 1, 1).data;
-  return green > r;
-}
-
-// The main body hue of each base sprite (measured from the art), for the fallback recolour.
-const BODY_HUE = { triangle: 0, 'triangle-right': 110, pentagon: 0, hexagon: 270, square: 110, rectangle: 30, rhombus: 50, parallelogram: 110 };
-
-// Bake the variants once, including their dimensions and mouth anchors. Swimming,
-// catching and the story can all use the same sprite without per-frame filters.
-function generateFishVariants() {
+// The extra fish (new colours and patterns, drawn as art) share one atlas; each is looked up
+// by its own key, with its frame and measured mouth, like the original fish.
+function mapFishVariants(img) {
+  const { boxes, mouths } = PopoGame.FISH_VARIANT_ATLAS;
   assets.fish.variants = {};
-  const filters = canvasFiltersWork();
-  for (const [key, variant] of Object.entries(PopoGame.FISH_VARIANTS)) {
-    const [x0, y0, x1, y1] = assets.fish.boxes[variant.base];
-    const img = document.createElement('canvas');
-    img.width = Math.round((x1 - x0) * variant.sx);
-    img.height = Math.round((y1 - y0) * variant.sy);
-    const ctx = img.getContext('2d');
-    const draw = () => ctx.drawImage(assets.fish.img, x0, y0, x1 - x0, y1 - y0, 0, 0, img.width, img.height);
-    if (filters) {
-      ctx.filter = `hue-rotate(${variant.hue}deg)`;
-      draw();
-    } else {
-      // a "hue" blend takes the new hue but keeps each pixel's saturation and lightness, so
-      // the eyes stay white and the outlines dark; then the fish's own outline cuts it out
-      draw();
-      ctx.globalCompositeOperation = 'hue';
-      ctx.fillStyle = `hsl(${((BODY_HUE[variant.base] || 0) + variant.hue) % 360}, 90%, 50%)`;
-      ctx.fillRect(0, 0, img.width, img.height);
-      ctx.globalCompositeOperation = 'destination-in';
-      draw();
-      ctx.globalCompositeOperation = 'source-over';
-    }
-    assets.fish.variants[key] = {
-      img, box: [0, 0, img.width, img.height], mouth: assets.fish.mouths[variant.base],
-    };
-  }
+  for (const key of Object.keys(boxes)) assets.fish.variants[key] = { img, box: boxes[key], mouth: mouths[key] };
 }
 
 function loadImage(src) {
@@ -89,7 +49,7 @@ function preloadBackground(index) {
 }
 
 async function loadCoreAssets() {
-  const [fishing, rowing, fish, bg0, props, mishapPoses, title, play, rowCycle, swiftee] = await Promise.all([
+  const [fishing, rowing, fish, bg0, props, mishapPoses, title, play, rowCycle, swiftee, fishVariants] = await Promise.all([
     loadImage('assets/sprites/popo-fishing.webp'),
     loadImage('assets/sprites/popo-rowing.webp'),
     loadImage('assets/sprites/fish.webp'),
@@ -100,6 +60,7 @@ async function loadCoreAssets() {
     loadImage(PLAY),
     loadImage('assets/sprites/popo-row-cycle.webp'),
     loadImage('assets/sprites/swiftee.webp'),
+    loadImage('assets/sprites/fish-variants.webp'),
   ]);
   assets.rowCycle = rowCycle;
   assets.title = title;
@@ -113,7 +74,7 @@ async function loadCoreAssets() {
     rowing: { img: rowing, data: SHEET_DATA.rowing },
   };
   assets.fish = { img: fish, boxes: FISH_ATLAS.boxes, mouths: FISH_ATLAS.mouths, width: FISH_ATLAS.width, height: FISH_ATLAS.height };
-  generateFishVariants();
+  mapFishVariants(fishVariants);
   preloadBackground(1);
   return bg0;
 }

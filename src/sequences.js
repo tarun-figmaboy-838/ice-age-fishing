@@ -651,7 +651,7 @@ async function discovery(game) {
     ui.clearHits();
 
     const wl = game.waterline;
-    const fish = new Fish(story.fish, STAGE_W + 120, wl + 170, -1, 1.15);
+    const fish = new Fish(Array.isArray(story.fish) ? anyOf(story.fish) : story.fish, STAGE_W + 120, wl + 170, -1, 1.15);
     game.leaper = fish;
     audio.play('whoosh');
     await clock.tween(950, token, (t) => {
