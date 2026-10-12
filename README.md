@@ -74,12 +74,13 @@ live in `STORY` in `src/levels.js`; Swiftee is `src/swiftee.js` (art from `asset
 four wing beats registered on the belly).
 
 Each level draws a different school of target fish and shuffles its distractors, so a replay
-never repeats the same set. Besides the original fish there are 23 more, drawn in new colours
+never repeats the same set. Besides the original fish there are 18 more, drawn in new colours
 and patterns (`asset/fish-variants.png`, cut, sized and measured by `tools/build-assets.py`
-into `assets/sprites/fish-variants.webp`): five triangles, five pentagons, five hexagons, two
-rhombuses for Quadrilateral Waters, and six trapeziums, one of which is the mystery fish at the
-end of each journey. The sheet's other two four-sided fish have no parallel sides; they read
-as trapeziums, so they are left out of the "every quadrilateral but the trapezium" level.
+into `assets/sprites/fish-variants.webp`): five triangles, four pentagons, three hexagons, a
+rhombus for Quadrilateral Waters, and five trapeziums, one of which is the mystery fish at the
+end of each journey. The build leaves out any fish whose colour is too close to the water's
+(the sheet's blue and teal fish vanish in it), and the sheet's two four-sided fish with no
+parallel sides, which read as trapeziums in the "every quadrilateral but the trapezium" level.
 
 `python3 tests/playthrough.py` plays the whole journey in headless Chromium (needs Python
 Playwright); `tests/mishap.py` and `tests/rowing.py` cover the wrong-answer reaction and rowing.

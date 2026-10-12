@@ -42,6 +42,17 @@ VARIANT_GRID = [
     ['hexagon-yellow', 'hexagon-teal', 'hexagon-pink', 'hexagon-orange', 'hexagon-blue'],
     ['trapezium-green', None, None, 'trapezium-gold', 'rhombus-red'],
 ]
+# Fish too close in colour to the water vanish in it, so they are left out: blue and teal fish.
+# The water behind the fish is about this colour; a body colour must be at least this far away.
+WATER_RGB = (1, 132, 242)
+MIN_WATER_CONTRAST = 140
+
+
+def body_colour(piece):
+    # the average of the vivid body pixels (pale fins, white eyes and dark outlines left out)
+    px = [p for p in piece.resize((max(1, piece.size[0] // 4), max(1, piece.size[1] // 4))).getdata()
+          if p[3] > 220 and max(p[:3]) > 60 and (max(p[:3]) - min(p[:3])) / max(p[:3]) > 0.5]
+    return tuple(sum(p[i] for p in px) / len(px) for i in range(3)) if px else WATER_RGB
 # Popo's poses: 3x3 sheets of the character with his rod or paddle only (no raft, line or hook).
 FISHING = 'popo-fishing-clean.png'
 ROWING = 'popo-paddling.png'
@@ -336,6 +347,10 @@ def build_fish_variants(fish_boxes):
             if not key:
                 continue
             fig = rows[r][c][2]
+            contrast = math.dist(body_colour(fig), WATER_RGB)
+            if contrast < MIN_WATER_CONTRAST:
+                print(f'  left out {key}: too close to the water colour ({contrast:.0f})')
+                continue
             base = key.split('-')[0]
             x0, y0, x1, y1 = fish_boxes[base]
             k = max(x1 - x0, y1 - y0) / max(fig.size)
